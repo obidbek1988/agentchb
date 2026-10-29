@@ -7,12 +7,16 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import FSInputFile, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import (
+    FSInputFile, ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+)
 
 from config import BOT_TOKEN, ARCHIVE_CHANNEL_ID
 from ai_service import ai_service
 from queue_manager import queue_manager
 from excel_service import build_bsb_excel, build_chsb_excel
+from criteria_store import get_criteria_for_grade, format_criteria_preview
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -43,7 +47,47 @@ def get_action_keyboard(show_finish: bool = False):
     kb.append([KeyboardButton(text="❌ Bekor qilish")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+def get_grade_selection_keyboard():
+    inline_kb = [
+        [
+            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="grade_6"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="grade_10"),
+            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="grade_11"),
+        ],
+        [
+            InlineKeyboardButton(text="👁 Mezonlarni ko‘rish", callback_data="view_criteria_menu")
+        ],
+        [
+            InlineKeyboardButton(text="📷 Boshqa fan (Yangi mezon rasmi)", callback_data="custom_criteria")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_kb)
+
+def get_criteria_preview_keyboard():
+    inline_kb = [
+        [
+            InlineKeyboardButton(text="6-sinf", callback_data="preview_6"),
+            InlineKeyboardButton(text="7-sinf", callback_data="preview_7"),
+            InlineKeyboardButton(text="8-sinf", callback_data="preview_8"),
+        ],
+        [
+            InlineKeyboardButton(text="9-sinf", callback_data="preview_9"),
+            InlineKeyboardButton(text="10-sinf", callback_data="preview_10"),
+            InlineKeyboardButton(text="11-sinf", callback_data="preview_11"),
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Tanlash menyusiga qaytish", callback_data="back_to_grades")
+        ]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=inline_kb)
+
 class BotStates(StatesGroup):
+    m1_journal_fixed = State()
     m1_journal = State()
     m1_criteria = State()
 
@@ -90,12 +134,102 @@ async def send_to_archive(doc_path: str, caption: str):
 @dp.message(F.text == "1️⃣ BSB (Ballar orqali)")
 async def mode1_start(message: types.Message, state: FSMContext):
     await state.clear()
-    await state.set_state(BotStates.m1_journal)
-    await message.answer(
+    msg = (
         "📝 **1-REJIM: BSB (Ballar orqali hisobot)**\n\n"
-        "1-qadam: **eMaktab elektron jurnali skrinshotini** (o‘quvchilar va ularning BSB ballari) yuboring:",
-        reply_markup=get_action_keyboard()
+        "O‘zbek sinflar Informatika 1-BSB rasmiy mezonlari **bazada tayyor saqlangan!**\n\n"
+        "💡 Sinfni tanlasangiz, mezon rasmini qayta-qayta yuklash shart emas — **faqat elektron jurnal skrinshotini** yuborsangiz kifoya!\n\n"
+        "Quyidagilardan birini tanlang yoki mezonni ko‘ring:"
     )
+    await message.answer(msg, reply_markup=get_grade_selection_keyboard(), parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("grade_"))
+async def handle_grade_selection(callback: CallbackQuery, state: FSMContext):
+    grade = callback.data.split("_")[1]
+    crit_info = get_criteria_for_grade(grade)
+    await state.update_data(fixed_criteria=crit_info, selected_grade=grade)
+    await state.set_state(BotStates.m1_journal_fixed)
+    await callback.message.answer(
+        f"✅ **{grade}-sinf Informatika 1-BSB ({crit_info['max_score']} ball)** tanlandi!\n\n"
+        f"📸 Endi faqat **eMaktab jurnali skrinshotini** yuboring:\n"
+        f"*(Mezon rasmi shart emas, avtomat mezon bilan hisobot tuziladi!)*",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data == "view_criteria_menu")
+@dp.callback_query(F.data == "back_to_grades")
+async def handle_criteria_menu(callback: CallbackQuery):
+    if callback.data == "back_to_grades":
+        await callback.message.edit_text(
+            "📝 **1-REJIM: BSB (Ballar orqali hisobot)**\n\nQaysi sinf hisobotini tayyorlaymiz?",
+            reply_markup=get_grade_selection_keyboard(),
+            parse_mode="Markdown"
+        )
+    else:
+        await callback.message.edit_text(
+            "👁 **Qaysi sinfning 1-BSB baholash mezonini ko‘rmoqchisiz?**",
+            reply_markup=get_criteria_preview_keyboard(),
+            parse_mode="Markdown"
+        )
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("preview_"))
+async def handle_preview_grade(callback: CallbackQuery):
+    grade = callback.data.split("_")[1]
+    preview_text = format_criteria_preview(grade)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"✅ Shu {grade}-sinf bilan hisobot tuzish", callback_data=f"grade_{grade}")],
+        [InlineKeyboardButton(text="⬅️ Boshqa sinflar mezonini ko‘rish", callback_data="view_criteria_menu")]
+    ])
+    await callback.message.edit_text(preview_text, reply_markup=kb, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(F.data == "custom_criteria")
+async def handle_custom_criteria(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await state.set_state(BotStates.m1_journal)
+    await callback.message.answer(
+        "📷 **Boshqa fan / Yangi mezon bilan hisobot tuzish**\n\n"
+        "1-qadam: **eMaktab elektron jurnali skrinshotini** yuboring:",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@dp.message(BotStates.m1_journal_fixed, F.photo)
+async def mode1_journal_fixed(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    crit_info = data.get("fixed_criteria")
+    grade = data.get("selected_grade", "")
+
+    status_msg = await message.answer(f"⏳ {grade}-sinf BSB hisoboti tayyorlanmoqda...")
+
+    os.makedirs("temp", exist_ok=True)
+    jpath = f"temp/m1_j_fixed_{message.from_user.id}_{message.message_id}.jpg"
+    await bot.download(message.photo[-1], destination=jpath)
+
+    try:
+        parsed = await ai_service.parse_bsb_with_fixed_criteria(jpath, crit_info)
+        cname = parsed.get("school_info", {}).get("class_name", f"{grade}-sinf")
+        out_excel = f"temp/{message.from_user.id}_{cname}_bsb.xlsx"
+        build_bsb_excel(parsed, out_excel)
+
+        doc = FSInputFile(out_excel, filename=f"{cname}_1-BSB_hisobot.xlsx")
+        cap = (
+            f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n"
+            f"• A4 Portret format\n"
+            f"• Ballar rasmiy mezon bo‘yicha taqsimlangan\n"
+            f"• Maksimal ball: {crit_info['max_score']}"
+        )
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf): {cname} | @{message.from_user.username or message.from_user.id}")
+        await status_msg.delete()
+    except Exception as e:
+        logger.error(f"Fixed Criteria BSB Error: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nIltimos, qaytadan urinib ko'ring.")
+    finally:
+        await state.clear()
 
 @dp.message(BotStates.m1_journal, F.photo)
 async def mode1_journal(message: types.Message, state: FSMContext):

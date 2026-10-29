@@ -28,6 +28,59 @@ class AIService:
             self._call_bsb_vision, journal_img_path, criteria_img_path
         )
 
+    async def parse_bsb_with_fixed_criteria(self, journal_img_path: str, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
+        return await queue_manager.execute_task(
+            self._call_bsb_fixed_vision, journal_img_path, fixed_criteria_info
+        )
+
+    def _call_bsb_fixed_vision(self, journal_img_path: str, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
+        criteria_list = fixed_criteria_info["criteria"]
+        max_score = fixed_criteria_info["max_score"]
+        crit_desc = "\n".join([f"Topshiriq {c['task_number']} (maks: {c['max_point']} ball): {c['skill_text']}" for c in criteria_list])
+
+        prompt = f"""
+Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
+Rasm: eMaktab elektron jurnali skrinshoti (o'quvchilar va ularning BSB ballari).
+
+Rasmiy Baholash mezonlari:
+{crit_desc}
+Maksimal umumiy ball: {max_score}
+
+Vazifangiz:
+1. Jurnaldagi sinf nomi (masalan: 9-G, 10-B), fan va o'qituvchi ismini aniqlang.
+2. Har bir o'quvchining F.I.O va 1-BSB ballini (total_score) aniqlang.
+3. Agar o'quvchi darsda qatnashmagan bo'lsa yoki balli yo'q bo'lsa: total_score: null, task_scores: [null, null, null, null, null].
+4. Agar balli bo'lsa, uni yuqoridagi {len(criteria_list)} ta mezonning max_point lariga mos taqsimlang (yig'indisi total_score ga teng bo'lsin).
+
+Quyidagi JSON formatida qaytaring:
+{{
+  "school_info": {{
+    "class_name": "{fixed_criteria_info.get('class_name', '')}",
+    "subject": "{fixed_criteria_info.get('subject', 'Informatika')}",
+    "quarter": {fixed_criteria_info.get('quarter', 1)},
+    "bsb_number": {fixed_criteria_info.get('bsb_number', 1)},
+    "max_score": {max_score},
+    "teacher_name": "Qobilov Obidjon",
+    "head_teacher": "Mahmudova Dilfuzaxon"
+  }},
+  "students": [
+    {{
+      "tr": 1,
+      "name": "O'quvchi F.I.O",
+      "total_score": 44,
+      "task_scores": [9, 9, 10, 7, 9]
+    }}
+  ]
+}}
+Javob FAQAT sof JSON bo'lsin.
+"""
+        res = self._send_prompt_to_gemini(prompt, [journal_img_path])
+        res["criteria"] = criteria_list
+        if "school_info" in res:
+            res["school_info"]["max_score"] = max_score
+            res["school_info"]["subject"] = fixed_criteria_info.get("subject", "Informatika")
+        return res
+
     def _call_bsb_vision(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
         prompt = """
 Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
