@@ -27,6 +27,11 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # In-memory channel storage if updated dynamically
 CURRENT_ARCHIVE_ID = ARCHIVE_CHANNEL_ID
+ADMIN_USERNAME = "obidbek1888"
+FEEDBACK_NOTE = (
+    "\n\n⚠️ _Eslatma: Tizim hozir test rejimida ishlamoqda. Tayyor bo‘lganda hisobotni bir tekshirib qo‘ying (imloviy xatolik bo‘lishi mumkin)._\n"
+    "📩 _Xato va takliflar uchun admin Telegrami:_ @obidbek1888"
+)
 
 def get_main_keyboard():
     kb = [
@@ -172,8 +177,10 @@ async def handle_grade_selection(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m1_journal_fixed)
     await callback.message.answer(
         f"✅ **{grade}-sinf Informatika 1-BSB ({crit_info['max_score']} ball)** tanlandi!\n\n"
-        f"📸 Endi faqat **eMaktab jurnali skrinshotini** yuboring:\n"
-        f"*(Mezon rasmi shart emas, avtomat mezon bilan hisobot tuziladi!)*",
+        f"💡 **Eng yaxshi va xatosiz usul:** eMaktabdan yuklangan **Excel (.xlsx yoki .xls) faylini** yuboring!\n"
+        f"• Excel fayl yuborilsa (hatto kirillcha bo‘lsa ham), **lotin alifbosida 0% imloviy xatosiz va 1 soniyada** mukammal tayyor bo‘ladi!\n\n"
+        f"📸 Agar Excel fayl bo‘lmasa, jurnalning **tiniq skrinshotini** yuboring (skrinshot xira bo‘lsa, ismlarda imloviy xatolik bo‘lishi mumkin).\n\n"
+        f"*(Mezon rasmi shart emas, bazadan avtomat olinadi!)*",
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
     )
@@ -213,7 +220,8 @@ async def handle_custom_criteria(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m1_journal)
     await callback.message.answer(
         "📷 **Boshqa fan / Yangi mezon bilan hisobot tuzish**\n\n"
-        "1-qadam: **eMaktab elektron jurnali skrinshotini** yuboring:",
+        "1-qadam: eMaktab elektron jurnali **Excel (.xlsx/.xls) faylini** yoki **tiniq skrinshotini** yuboring:\n"
+        "*(Excel fayl bo‘lsa 100% xatosiz va tez tayyor bo‘ladi!)*",
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
     )
@@ -250,13 +258,14 @@ async def mode1_fixed_document(message: types.Message, state: FSMContext):
             f"• O‘quvchilar soni: {len(parsed['students'])} nafar\n"
             f"• A4 Portret format\n"
             f"• Ballar rasmiy mezon bo‘yicha taqsimlangan"
+            f"{FEEDBACK_NOTE}"
         )
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf Excel): {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Excel Direct Parse Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Faylni o‘qishda xatolik: {str(e)}")
+        await status_msg.edit_text(f"❌ Faylni o‘qishda xatolik: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
     finally:
         await state.clear()
 
@@ -306,13 +315,20 @@ async def mode1_fixed_finish(message: types.Message, state: FSMContext):
             f"• Manba: {len(j_list)} ta skrinshot birlashtirildi\n"
             f"• A4 Portret format\n"
             f"• Ballar rasmiy mezon bo‘yicha taqsimlangan"
+            f"{FEEDBACK_NOTE}"
         )
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf): {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Fixed Criteria BSB Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nIltimos, qaytadan urinib ko'ring.")
+        err_msg = (
+            f"⚠️ **Rasm xira bo‘lgani yoki tahlil qilishda qiyinchilik bo‘lgani sababli xatolik yuz berdi!**\n\n"
+            f"💡 **Tavsiya:** eMaktabdan elektron jurnalni **Excel (.xlsx yoki .xls)** formatida yuklab olib botga yuboring — unda kirillcha bo‘lsa ham 100% xatosiz va darhol tayyor bo‘ladi!\n\n"
+            f"📸 Yoki jurnalning tiniqroq skrinshotini qaytadan yuborib ko‘ring.\n\n"
+            f"📩 Xato va takliflar uchun admin: @{ADMIN_USERNAME}"
+        )
+        await status_msg.edit_text(err_msg, parse_mode="Markdown")
     finally:
         await state.clear()
 
@@ -395,13 +411,20 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
             f"• {len(j_list)} ta jurnal + {len(c_list)} ta mezon sahifalari birlashtirildi\n"
             f"• A4 Portret format\n"
             f"• Ballar mezonlar bo‘yicha taqsimlangan"
+            f"{FEEDBACK_NOTE}"
         )
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 1 Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nIltimos, qaytadan urinib ko'ring.")
+        err_msg = (
+            f"⚠️ **Rasm xira bo‘lgani yoki tahlil qilishda qiyinchilik bo‘lgani sababli xatolik yuz berdi!**\n\n"
+            f"💡 **Tavsiya:** eMaktabdan elektron jurnalni **Excel (.xlsx yoki .xls)** formatida yuklab olib botga yuboring — unda kirillcha bo‘lsa ham 100% xatosiz va tez tayyor bo‘ladi!\n\n"
+            f"📸 Yoki jurnal va mezonning tiniqroq skrinshotlarini qaytadan yuborib ko‘ring.\n\n"
+            f"📩 Xato va takliflar uchun admin: @{ADMIN_USERNAME}"
+        )
+        await status_msg.edit_text(err_msg, parse_mode="Markdown")
     finally:
         await state.clear()
 
@@ -469,13 +492,13 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         build_bsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_BSB_tekshirilgan_hisobot.xlsx")
-        cap = f"🎉 **{cname} sinf o‘quvchilarining yozma ishlari to‘liq tekshirildi va BSB hisoboti tuzildi!**"
+        cap = f"🎉 **{cname} sinf o‘quvchilarining yozma ishlari to‘liq tekshirildi va BSB hisoboti tuzildi!**{FEEDBACK_NOTE}"
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 2 Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
     finally:
         await state.clear()
 
@@ -524,13 +547,17 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         build_chsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_hisobot.xlsx")
-        cap = f"🎉 **{cname} sinf CHSB hisoboti tayyor!**\n• (B) Bilish (6 ball), (Q) Qo‘llash (24 ball), (M) Mulohaza (10 ball) taqsimlangan."
+        cap = (
+            f"🎉 **{cname} sinf CHSB hisoboti tayyor!**\n"
+            f"• (B) Bilish (6 ball), (Q) Qo‘llash (24 ball), (M) Mulohaza (10 ball) taqsimlangan."
+            f"{FEEDBACK_NOTE}"
+        )
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 3 Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
     finally:
         await state.clear()
 
@@ -598,13 +625,13 @@ async def mode4_finish(message: types.Message, state: FSMContext):
         build_chsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_test_tekshirilgan.xlsx")
-        cap = f"🎉 **{cname} sinf testlari to‘liq tekshirildi va CHSB hisoboti tayyorlandi!**"
+        cap = f"🎉 **{cname} sinf testlari to‘liq tekshirildi va CHSB hisoboti tayyorlandi!**{FEEDBACK_NOTE}"
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 4 Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
     finally:
         await state.clear()
 

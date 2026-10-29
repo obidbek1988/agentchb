@@ -8,6 +8,7 @@ import re
 from typing import Dict, Any, List, Optional
 import openpyxl
 import xlrd
+from cyrillic_translit import to_uzbek_latin
 
 def distribute_score_to_tasks(total_score: Optional[int], criteria: List[Dict[str, Any]]) -> List[Optional[int]]:
     if total_score is None or total_score <= 0:
@@ -102,9 +103,10 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
     if start_r != -1 and bsb_col != -1:
         tr = 1
         for r in range(start_r, sheet.nrows):
-            name = str(sheet.cell_value(r, 1)).strip()
-            if not name or name.isdigit() or len(name) < 3:
+            raw_name = str(sheet.cell_value(r, 1)).strip()
+            if not raw_name or raw_name.isdigit() or len(raw_name) < 3:
                 continue
+            name = to_uzbek_latin(raw_name)
             
             score_val = sheet.cell_value(r, bsb_col)
             tot = None
@@ -125,12 +127,12 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
 
     return {
         "school_info": {
-            "class_name": class_name,
-            "subject": subject,
+            "class_name": to_uzbek_latin(class_name),
+            "subject": to_uzbek_latin(subject),
             "quarter": 1,
             "bsb_number": 1,
             "max_score": max_score,
-            "teacher_name": teacher_name,
+            "teacher_name": to_uzbek_latin(teacher_name),
             "head_teacher": "Mahmudova Dilfuzaxon"
         },
         "criteria": criteria or [],
@@ -188,9 +190,10 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
     if start_r != -1 and bsb_col != -1:
         tr = 1
         for r in range(start_r, sheet.max_row + 1):
-            name = str(sheet.cell(r, 2).value or "").strip()
-            if not name or name.isdigit() or len(name) < 3:
+            raw_name = str(sheet.cell(r, 2).value or "").strip()
+            if not raw_name or raw_name.isdigit() or len(raw_name) < 3:
                 continue
+            name = to_uzbek_latin(raw_name)
 
             score_val = sheet.cell(r, bsb_col).value
             tot = None
@@ -211,12 +214,12 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
 
     return {
         "school_info": {
-            "class_name": class_name,
-            "subject": subject,
+            "class_name": to_uzbek_latin(class_name),
+            "subject": to_uzbek_latin(subject),
             "quarter": 1,
             "bsb_number": 1,
             "max_score": max_score,
-            "teacher_name": teacher_name,
+            "teacher_name": to_uzbek_latin(teacher_name),
             "head_teacher": "Mahmudova Dilfuzaxon"
         },
         "criteria": criteria or [],
