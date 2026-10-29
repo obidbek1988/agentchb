@@ -17,6 +17,7 @@ from ai_service import ai_service
 from queue_manager import queue_manager
 from excel_service import build_bsb_excel, build_chsb_excel
 from criteria_store import get_criteria_for_grade, format_criteria_preview
+from emaktab_parser import parse_emaktab_file
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -218,20 +219,83 @@ async def handle_custom_criteria(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-@dp.message(BotStates.m1_journal_fixed, F.photo)
-async def mode1_journal_fixed(message: types.Message, state: FSMContext):
+# ==================== 1-REJIM: TAYYOR MEZON BILAN ISHLASH ====================
+@dp.message(BotStates.m1_journal_fixed, F.document)
+async def mode1_fixed_document(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
+        await message.answer("Iltimos, eMaktab elektron jurnalini .xlsx yoki .xls formatda yuboring.")
+        return
+
     data = await state.get_data()
     crit_info = data.get("fixed_criteria")
     grade = data.get("selected_grade", "")
 
-    status_msg = await message.answer(f"⏳ {grade}-sinf BSB hisoboti tayyorlanmoqda...")
+    status_msg = await message.answer(f"⏳ {grade}-sinf elektron jurnali ({fname}) to‘g‘ridan-to‘g‘ri o‘qilmoqda...")
+    os.makedirs("temp", exist_ok=True)
+    ext = ".xls" if fname.endswith(".xls") else ".xlsx"
+    fpath = f"temp/m1_doc_{message.from_user.id}_{message.message_id}{ext}"
+    await bot.download(message.document, destination=fpath)
 
+    try:
+        parsed = parse_emaktab_file(fpath, criteria=crit_info["criteria"])
+        cname = parsed.get("school_info", {}).get("class_name") or f"{grade}-sinf"
+        out_excel = f"temp/{message.from_user.id}_{cname}_bsb.xlsx"
+        build_bsb_excel(parsed, out_excel)
+
+        doc = FSInputFile(out_excel, filename=f"{cname}_1-BSB_hisobot.xlsx")
+        cap = (
+            f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n"
+            f"• Manba: eMaktab elektron jurnali ({ext})\n"
+            f"• O‘quvchilar soni: {len(parsed['students'])} nafar\n"
+            f"• A4 Portret format\n"
+            f"• Ballar rasmiy mezon bo‘yicha taqsimlangan"
+        )
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf Excel): {cname} | @{message.from_user.username or message.from_user.id}")
+        await status_msg.delete()
+    except Exception as e:
+        logger.error(f"Excel Direct Parse Error: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ Faylni o‘qishda xatolik: {str(e)}")
+    finally:
+        await state.clear()
+
+@dp.message(BotStates.m1_journal_fixed, F.photo)
+async def mode1_fixed_photo(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     jpath = f"temp/m1_j_fixed_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=jpath)
 
+    data = await state.get_data()
+    j_list = data.get("journal_paths", [])
+    j_list.append(jpath)
+    await state.update_data(journal_paths=j_list)
+
+    count = len(j_list)
+    await message.answer(
+        f"📥 **{count}-jurnal rasmi qabul qilindi.**\n\n"
+        f"• Agar jurnal davomi bo‘lsa, keyingi rasmni yuboring.\n"
+        f"• Rasmlar tugagan bo‘lsa, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+        reply_markup=get_action_keyboard(show_finish=True)
+    )
+
+@dp.message(BotStates.m1_journal_fixed, F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
+async def mode1_fixed_finish(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    j_list = data.get("journal_paths", [])
+    crit_info = data.get("fixed_criteria")
+    grade = data.get("selected_grade", "")
+
+    if not j_list:
+        await message.answer("Iltimos, avval elektron jurnal rasmini yuboring.")
+        return
+
+    pos, eta = queue_manager.get_queue_info()
+    queue_msg = f"⏳ Navbatdagi o‘rningiz: №{pos} (kutilmoqda: ~{eta}s)..." if pos > 1 else f"⏳ {grade}-sinf BSB hisoboti tayyorlanmoqda ({len(j_list)} ta rasm birlashtirilmoqda)..."
+    status_msg = await message.answer(queue_msg)
+
     try:
-        parsed = await ai_service.parse_bsb_with_fixed_criteria(jpath, crit_info)
+        parsed = await ai_service.parse_bsb_with_fixed_criteria(j_list, crit_info)
         cname = parsed.get("school_info", {}).get("class_name", f"{grade}-sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_bsb.xlsx"
         build_bsb_excel(parsed, out_excel)
@@ -239,9 +303,9 @@ async def mode1_journal_fixed(message: types.Message, state: FSMContext):
         doc = FSInputFile(out_excel, filename=f"{cname}_1-BSB_hisobot.xlsx")
         cap = (
             f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n"
+            f"• Manba: {len(j_list)} ta skrinshot birlashtirildi\n"
             f"• A4 Portret format\n"
-            f"• Ballar rasmiy mezon bo‘yicha taqsimlangan\n"
-            f"• Maksimal ball: {crit_info['max_score']}"
+            f"• Ballar rasmiy mezon bo‘yicha taqsimlangan"
         )
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf): {cname} | @{message.from_user.username or message.from_user.id}")
@@ -252,41 +316,86 @@ async def mode1_journal_fixed(message: types.Message, state: FSMContext):
     finally:
         await state.clear()
 
+# ==================== 1-REJIM: BOSHQACHA/YANGI MEZON BILAN ISHLASH ====================
 @dp.message(BotStates.m1_journal, F.photo)
 async def mode1_journal(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     fpath = f"temp/m1_j_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=fpath)
-    await state.update_data(journal_path=fpath)
 
+    data = await state.get_data()
+    j_list = data.get("journal_paths", [])
+    j_list.append(fpath)
+    await state.update_data(journal_paths=j_list)
+
+    await message.answer(
+        f"📥 **{len(j_list)}-jurnal rasmi qabul qilindi.**\n\n"
+        f"• Agar jurnal davomi bo‘lsa, keyingi sahifa rasmini yuboring.\n"
+        f"• Jurnal rasmlari tugagan bo‘lsa, pastdagi **'✅ Jurnal tugadi, mezonga o‘tish'** tugmasini bosing:",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="✅ Jurnal tugadi, mezonga o‘tish")], [KeyboardButton(text="❌ Bekor qilish")]],
+            resize_keyboard=True
+        )
+    )
+
+@dp.message(BotStates.m1_journal, F.text == "✅ Jurnal tugadi, mezonga o‘tish")
+async def mode1_journal_done(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    if not data.get("journal_paths"):
+        await message.answer("Iltimos, avval jurnal rasmini yuboring.")
+        return
     await state.set_state(BotStates.m1_criteria)
     await message.answer(
-        "✅ Jurnal rasmi qabul qilindi!\n\n"
-        "2-qadam: Ushbu BSB ning **Baholash mezoni skrinshotini** yuboring:",
-        reply_markup=get_action_keyboard()
+        "✅ Jurnal rasmlari qabul qilindi!\n\n"
+        "2-qadam: Endi ushbu BSB ning **Baholash mezoni rasmlarini** yuboring (1 yoki 2 sahifa bo‘lsa ham ketma-ket yuboring):",
+        reply_markup=get_action_keyboard(show_finish=True)
     )
 
 @dp.message(BotStates.m1_criteria, F.photo)
-async def mode1_criteria(message: types.Message, state: FSMContext):
-    pos, eta = queue_manager.get_queue_info()
-    queue_msg = f"⏳ Navbatdagi o‘rningiz: №{pos} (kutilmoqda: ~{eta}s)..." if pos > 1 else "⏳ BSB tahlil qilinmoqda..."
-    status_msg = await message.answer(queue_msg)
-
+async def mode1_criteria_photo(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     cpath = f"temp/m1_c_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=cpath)
 
     data = await state.get_data()
-    jpath = data.get("journal_path")
+    c_list = data.get("criteria_paths", [])
+    c_list.append(cpath)
+    await state.update_data(criteria_paths=c_list)
+
+    await message.answer(
+        f"📥 **{len(c_list)}-mezon rasmi qabul qilindi.**\n\n"
+        f"• Yana mezon rasmi bo‘lsa, yuboring.\n"
+        f"• Rasmlar tugagan bo‘lsa, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+        reply_markup=get_action_keyboard(show_finish=True)
+    )
+
+@dp.message(BotStates.m1_criteria, F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
+async def mode1_criteria_finish(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    j_list = data.get("journal_paths", [])
+    c_list = data.get("criteria_paths", [])
+
+    if not c_list:
+        await message.answer("Iltimos, avval baholash mezoni rasmini yuboring.")
+        return
+
+    pos, eta = queue_manager.get_queue_info()
+    queue_msg = f"⏳ Navbatdagi o‘rningiz: №{pos} (kutilmoqda: ~{eta}s)..." if pos > 1 else f"⏳ BSB tahlil qilinmoqda ({len(j_list)} ta jurnal, {len(c_list)} ta mezon rasmi birlashtirilmoqda)..."
+    status_msg = await message.answer(queue_msg)
 
     try:
-        parsed = await ai_service.parse_bsb_data(jpath, cpath)
+        parsed = await ai_service.parse_bsb_data(j_list, c_list)
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_bsb.xlsx"
         build_bsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_1-BSB_hisobot.xlsx")
-        cap = f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n• A4 Portret format\n• Ballar mezonlar bo‘yicha taqsimlangan"
+        cap = (
+            f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n"
+            f"• {len(j_list)} ta jurnal + {len(c_list)} ta mezon sahifalari birlashtirildi\n"
+            f"• A4 Portret format\n"
+            f"• Ballar mezonlar bo‘yicha taqsimlangan"
+        )
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()

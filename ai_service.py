@@ -23,24 +23,27 @@ class AIService:
         return key
 
     # 1-TUGMA: BSB ballar bo'yicha
-    async def parse_bsb_data(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
+    async def parse_bsb_data(self, journal_img_paths: Any, criteria_img_paths: Any) -> Dict[str, Any]:
         return await queue_manager.execute_task(
-            self._call_bsb_vision, journal_img_path, criteria_img_path
+            self._call_bsb_vision, journal_img_paths, criteria_img_paths
         )
 
-    async def parse_bsb_with_fixed_criteria(self, journal_img_path: str, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
+    async def parse_bsb_with_fixed_criteria(self, journal_img_paths: Any, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
         return await queue_manager.execute_task(
-            self._call_bsb_fixed_vision, journal_img_path, fixed_criteria_info
+            self._call_bsb_fixed_vision, journal_img_paths, fixed_criteria_info
         )
 
-    def _call_bsb_fixed_vision(self, journal_img_path: str, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
+    def _call_bsb_fixed_vision(self, journal_img_paths: Any, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
         criteria_list = fixed_criteria_info["criteria"]
         max_score = fixed_criteria_info["max_score"]
         crit_desc = "\n".join([f"Topshiriq {c['task_number']} (maks: {c['max_point']} ball): {c['skill_text']}" for c in criteria_list])
 
+        j_list = journal_img_paths if isinstance(journal_img_paths, list) else [journal_img_paths]
+
         prompt = f"""
 Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
-Rasm: eMaktab elektron jurnali skrinshoti (o'quvchilar va ularning BSB ballari).
+Yuborilgan {len(j_list)} ta rasm: eMaktab elektron jurnali skrinshotlari (o'quvchilar va ularning BSB ballari).
+Agar sinfda o'quvchilar ko'p bo'lib 2 ta yoki undan ortiq rasm bo'lsa, ularni ketma-ket birlashtirib, tartib raqami (tr) bo'yicha bitta umumiy ro'yxat qiling!
 
 Rasmiy Baholash mezonlari:
 {crit_desc}
@@ -48,7 +51,7 @@ Maksimal umumiy ball: {max_score}
 
 Vazifangiz:
 1. Jurnaldagi sinf nomi (masalan: 9-G, 10-B), fan va o'qituvchi ismini aniqlang.
-2. Har bir o'quvchining F.I.O va 1-BSB ballini (total_score) aniqlang.
+2. Barcha rasmlardagi barcha o'quvchilarning F.I.O va 1-BSB ballini (total_score) aniqlang.
 3. Agar o'quvchi darsda qatnashmagan bo'lsa yoki balli yo'q bo'lsa: total_score: null, task_scores: [null, null, null, null, null].
 4. Agar balli bo'lsa, uni yuqoridagi {len(criteria_list)} ta mezonning max_point lariga mos taqsimlang (yig'indisi total_score ga teng bo'lsin).
 
@@ -74,22 +77,30 @@ Quyidagi JSON formatida qaytaring:
 }}
 Javob FAQAT sof JSON bo'lsin.
 """
-        res = self._send_prompt_to_gemini(prompt, [journal_img_path])
+        res = self._send_prompt_to_gemini(prompt, j_list)
         res["criteria"] = criteria_list
         if "school_info" in res:
             res["school_info"]["max_score"] = max_score
             res["school_info"]["subject"] = fixed_criteria_info.get("subject", "Informatika")
         return res
 
-    def _call_bsb_vision(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
-        prompt = """
+    def _call_bsb_vision(self, journal_img_paths: Any, criteria_img_paths: Any) -> Dict[str, Any]:
+        j_list = journal_img_paths if isinstance(journal_img_paths, list) else [journal_img_paths]
+        c_list = criteria_img_paths if isinstance(criteria_img_paths, list) else [criteria_img_paths]
+
+        prompt = f"""
 Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
-1-rasm: eMaktab elektron jurnali skrinshoti (o'quvchilar va ularning BSB ballari).
-2-rasm: Rasmiy Baholash mezoni jadvali (ko'nikmalar matni va ajratilgan ballar).
+Dastlabki {len(j_list)} ta rasm: eMaktab elektron jurnali skrinshotlari (barcha o'quvchilar va ularning BSB ballari).
+Keyingi {len(c_list)} ta rasm: Rasmiy Baholash mezoni jadvali (ko'nikmalar matni va ajratilgan ballar, bir nechta sahifa bo'lishi mumkin).
+
+Vazifangiz:
+1. Mezon rasmlaridagi barcha mezonlarni to'liq aniqlang (har doim Bosh harf bilan boshlansin, oxiriga '\\n\\nJami: X ball' yozilsin).
+2. Jurnal rasmlaridagi barcha sahifalardagi o'quvchilarni ketma-ket birlashtirib, F.I.O va ballarini oling.
+3. Jurnaldagi 'total_score' mezonlarning 'max_point' lariga mos keladigan qilib 'task_scores' ga taqsimlansin (yig'indisi total_score ga teng bo'lsin).
 
 Quyidagi JSON formatida qaytaring:
-{
-  "school_info": {
+{{
+  "school_info": {{
     "class_name": "10-B",
     "subject": "Informatika",
     "quarter": 1,
@@ -97,35 +108,33 @@ Quyidagi JSON formatida qaytaring:
     "max_score": 50,
     "teacher_name": "Qobilov Obidjon",
     "head_teacher": "Mahmudova Dilfuzaxon"
-  },
+  }},
   "criteria": [
-    {
+    {{
       "task_number": 1,
       "skill_text": "Maʼlumot, axborot va bilimlar bazasi oʻrtasidagi farqlarni tushunadi;\\n\\nJami: 10 ball",
       "max_point": 10
-    }
+    }}
   ],
   "students": [
-    {
+    {{
       "tr": 1,
       "name": "Abdullayeva Muslimaxon",
       "total_score": null,
       "task_scores": [null, null, null, null, null]
-    },
-    {
+    }},
+    {{
       "tr": 2,
       "name": "Abdumannonova Lazizabonu",
       "total_score": 44,
       "task_scores": [10, 8, 9, 9, 8]
-    }
+    }}
   ]
-}
-MUHIM:
-1. Mezonlar har doim Bosh harf bilan boshlansin, oxiriga '\\n\\nJami: X ball' yozilsin.
-2. Jurnaldagi 'total_score' mezonlarning 'max_point' lariga mos keladigan qilib 'task_scores' ga taqsimlansin (yig'indisi total_score ga teng bo'lsin).
-3. Javob FAQAT sof JSON bo'lsin.
+}}
+Javob FAQAT sof JSON bo'lsin.
 """
-        return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
+        all_imgs = j_list + c_list
+        return self._send_prompt_to_gemini(prompt, all_imgs)
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
