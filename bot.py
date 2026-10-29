@@ -107,6 +107,27 @@ async def handle_channel_post(message: types.Message):
     CURRENT_ARCHIVE_ID = str(message.chat.id)
     logger.info(f"Avtomatik arxiv kanal ID aniqlandi: {CURRENT_ARCHIVE_ID}")
 
+@dp.my_chat_member()
+async def handle_my_chat_member(event: types.ChatMemberUpdated):
+    global CURRENT_ARCHIVE_ID
+    if event.chat.type in ["channel", "supergroup"]:
+        CURRENT_ARCHIVE_ID = str(event.chat.id)
+        logger.info(f"Bot kanal/guruhga a'zo qilindi: {CURRENT_ARCHIVE_ID}")
+
+@dp.message(F.forward_from_chat)
+async def handle_forward(message: types.Message):
+    global CURRENT_ARCHIVE_ID
+    if message.forward_from_chat.type == "channel":
+        CURRENT_ARCHIVE_ID = str(message.forward_from_chat.id)
+        logger.info(f"Forward orqali kanal ID aniqlandi: {CURRENT_ARCHIVE_ID}")
+        await message.answer(
+            f"✅ **Kanal muvaffaqiyatli ulandi!**\n\n"
+            f"📢 Kanal: **{message.forward_from_chat.title or 'Nomsiz'}**\n"
+            f"🆔 ID: `{CURRENT_ARCHIVE_ID}`\n\n"
+            f"Endi bot yaratgan barcha Excel hisobotlar to‘g‘ridan-to‘g‘ri shu kanalingizga ham avtomatik tashlanadi!",
+            parse_mode="Markdown"
+        )
+
 @dp.message(CommandStart())
 @dp.message(F.text == "❌ Bekor qilish")
 async def start_cmd(message: types.Message, state: FSMContext):
