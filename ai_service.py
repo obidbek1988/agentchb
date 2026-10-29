@@ -39,8 +39,8 @@ class AIService:
             key = self._get_next_key()
             genai.configure(api_key=key)
             
-            # Using flash model for high speed, multimodal capabilities and high limits
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            # Using Gemini 3.8 Flash model for fast multimodal vision
+            model = genai.GenerativeModel("gemini-3.8-flash")
 
             prompt = """
 Siz umumta'lim maktablarining BSB (Baholash sinov topshiriqlari) hisobotlarini shakllantiruvchi yordamchisiz.
