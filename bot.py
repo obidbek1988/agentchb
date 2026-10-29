@@ -7,10 +7,11 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import FSInputFile, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import FSInputFile, ReplyKeyboardMarkup, KeyboardButton
 
 from config import BOT_TOKEN, ARCHIVE_CHANNEL_ID
 from ai_service import ai_service
+from queue_manager import queue_manager
 from excel_service import build_bsb_excel, build_chsb_excel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Main Keyboard
+# In-memory channel storage if updated dynamically
+CURRENT_ARCHIVE_ID = ARCHIVE_CHANNEL_ID
+
 def get_main_keyboard():
     kb = [
         [
@@ -40,23 +43,25 @@ def get_action_keyboard(show_finish: bool = False):
     kb.append([KeyboardButton(text="❌ Bekor qilish")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
-# States
 class BotStates(StatesGroup):
-    # Mode 1: BSB by scores
     m1_journal = State()
     m1_criteria = State()
 
-    # Mode 2: BSB evaluate written student works
     m2_criteria = State()
     m2_works = State()
 
-    # Mode 3: CHSB by scores
     m3_journal = State()
     m3_criteria = State()
 
-    # Mode 4: CHSB evaluate test sheets
     m4_keys = State()
     m4_student_tests = State()
+
+# Catch channel posts to auto-detect archive channel ID
+@dp.channel_post()
+async def handle_channel_post(message: types.Message):
+    global CURRENT_ARCHIVE_ID
+    CURRENT_ARCHIVE_ID = str(message.chat.id)
+    logger.info(f"Avtomatik arxiv kanal ID aniqlandi: {CURRENT_ARCHIVE_ID}")
 
 @dp.message(CommandStart())
 @dp.message(F.text == "❌ Bekor qilish")
@@ -71,6 +76,15 @@ async def start_cmd(message: types.Message, state: FSMContext):
         "4️⃣ **CHSB (Testlarni tekshirish):** Test to‘g‘ri kaliti va o‘quvchi javoblari varaqasini tekshirib hisobot qilish."
     )
     await message.answer(welcome_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+
+async def send_to_archive(doc_path: str, caption: str):
+    global CURRENT_ARCHIVE_ID
+    if CURRENT_ARCHIVE_ID:
+        try:
+            doc = FSInputFile(doc_path)
+            await bot.send_document(CURRENT_ARCHIVE_ID, doc, caption=caption)
+        except Exception as e:
+            logger.warning(f"Arxiv kanalga jo'natilmadi: {e}")
 
 # ==================== 1-REJIM: BSB BALLAR ORQALI ====================
 @dp.message(F.text == "1️⃣ BSB (Ballar orqali)")
@@ -93,13 +107,16 @@ async def mode1_journal(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m1_criteria)
     await message.answer(
         "✅ Jurnal rasmi qabul qilindi!\n\n"
-        "2-qadam: Ushbu BSB ning **Baholash mezoni skrinshotini** (yoki PDF sahifasi rasmini) yuboring:",
+        "2-qadam: Ushbu BSB ning **Baholash mezoni skrinshotini** yuboring:",
         reply_markup=get_action_keyboard()
     )
 
 @dp.message(BotStates.m1_criteria, F.photo)
 async def mode1_criteria(message: types.Message, state: FSMContext):
-    status_msg = await message.answer("⏳ BSB ma'lumotlari tahlil qilinmoqda...")
+    pos, eta = queue_manager.get_queue_info()
+    queue_msg = f"⏳ Navbatdagi o‘rningiz: №{pos} (kutilmoqda: ~{eta}s)..." if pos > 1 else "⏳ BSB tahlil qilinmoqda..."
+    status_msg = await message.answer(queue_msg)
+
     os.makedirs("temp", exist_ok=True)
     cpath = f"temp/m1_c_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=cpath)
@@ -114,12 +131,9 @@ async def mode1_criteria(message: types.Message, state: FSMContext):
         build_bsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_1-BSB_hisobot.xlsx")
-        await message.answer_document(
-            doc,
-            caption=f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n• A4 Portret format\n• Ballar mezonlar bo‘yicha taqsimlangan",
-            reply_markup=get_main_keyboard(),
-            parse_mode="Markdown"
-        )
+        cap = f"🎉 **{cname} sinf 1-BSB hisoboti tayyor!**\n• A4 Portret format\n• Ballar mezonlar bo‘yicha taqsimlangan"
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Yangi BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 1 Error: {e}", exc_info=True)
@@ -148,8 +162,8 @@ async def mode2_criteria(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m2_works)
     await message.answer(
         "✅ Mezon qabul qilindi!\n\n"
-        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini** birma-bir yuboring.\n"
-        "Barcha o‘quvchilar rasmlarini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
+        "Barcha rasmlarni yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
         reply_markup=get_action_keyboard(show_finish=True)
     )
 
@@ -176,20 +190,24 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         await message.answer("Iltimos, avval kamida bitta o‘quvchi ishi rasmini yuboring.")
         return
 
-    status_msg = await message.answer(f"⏳ AI {len(wlist)} nafar o‘quvchining ishini tekshirib, ball qo‘ymoqda...")
+    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(wlist)} nafar o‘quvchining ishi 5 tadan bo‘lib xavfsiz tekshirilmoqda...")
+
+    async def update_progress(text):
+        try:
+            await status_msg.edit_text(text)
+        except:
+            pass
+
     try:
-        parsed = await ai_service.evaluate_student_works(cpath, wlist)
+        parsed = await ai_service.evaluate_student_works(cpath, wlist, progress_callback=update_progress)
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_bsb_evaluated.xlsx"
         build_bsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_BSB_tekshirilgan_hisobot.xlsx")
-        await message.answer_document(
-            doc,
-            caption=f"🎉 **{cname} sinf o‘quvchilarining yozma ishlari tekshirildi va BSB hisoboti tuzildi!**",
-            reply_markup=get_main_keyboard(),
-            parse_mode="Markdown"
-        )
+        cap = f"🎉 **{cname} sinf o‘quvchilarining yozma ishlari to‘liq tekshirildi va BSB hisoboti tuzildi!**"
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Tekshirilgan BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 2 Error: {e}", exc_info=True)
@@ -224,7 +242,10 @@ async def mode3_journal(message: types.Message, state: FSMContext):
 
 @dp.message(BotStates.m3_criteria, F.photo)
 async def mode3_criteria(message: types.Message, state: FSMContext):
-    status_msg = await message.answer("⏳ CHSB ma'lumotlari (B, Q, M mezonlari) bo‘yicha tahlil qilinmoqda...")
+    pos, eta = queue_manager.get_queue_info()
+    queue_msg = f"⏳ Navbatdagi o‘rningiz: №{pos} (kutilmoqda: ~{eta}s)..." if pos > 1 else "⏳ CHSB (B, Q, M) tahlil qilinmoqda..."
+    status_msg = await message.answer(queue_msg)
+
     os.makedirs("temp", exist_ok=True)
     cpath = f"temp/m3_c_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=cpath)
@@ -239,12 +260,9 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         build_chsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_hisobot.xlsx")
-        await message.answer_document(
-            doc,
-            caption=f"🎉 **{cname} sinf CHSB hisoboti tayyor!**\n• (B) Bilish (6 ball), (Q) Qo‘llash (24 ball), (M) Mulohaza (10 ball) taqsimlangan.",
-            reply_markup=get_main_keyboard(),
-            parse_mode="Markdown"
-        )
+        cap = f"🎉 **{cname} sinf CHSB hisoboti tayyor!**\n• (B) Bilish (6 ball), (Q) Qo‘llash (24 ball), (M) Mulohaza (10 ball) taqsimlangan."
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Yangi CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 3 Error: {e}", exc_info=True)
@@ -273,7 +291,7 @@ async def mode4_keys(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m4_student_tests)
     await message.answer(
         "✅ Test kaliti qabul qilindi!\n\n"
-        "2-qadam: Endi **o‘quvchilarning belgilagan javoblar varaqasi rasmlarini** yuboring.\n"
+        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
         "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
         reply_markup=get_action_keyboard(show_finish=True)
     )
@@ -301,20 +319,24 @@ async def mode4_finish(message: types.Message, state: FSMContext):
         await message.answer("Iltimos, avval kamida bitta o‘quvchi test javobi rasmini yuboring.")
         return
 
-    status_msg = await message.answer(f"⏳ AI {len(tlist)} nafar o‘quvchining testlarini to‘g‘ri kalit bilan tekshirmoqda...")
+    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(tlist)} nafar o‘quvchining testlari 5 tadan bo‘lib xavfsiz tekshirilmoqda...")
+
+    async def update_progress(text):
+        try:
+            await status_msg.edit_text(text)
+        except:
+            pass
+
     try:
-        parsed = await ai_service.evaluate_test_answers(kpath, tlist)
+        parsed = await ai_service.evaluate_test_answers(kpath, tlist, progress_callback=update_progress)
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_chsb_test_report.xlsx"
         build_chsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_test_tekshirilgan.xlsx")
-        await message.answer_document(
-            doc,
-            caption=f"🎉 **{cname} sinf testlari tekshirildi va CHSB hisoboti tayyorlandi!**",
-            reply_markup=get_main_keyboard(),
-            parse_mode="Markdown"
-        )
+        cap = f"🎉 **{cname} sinf testlari to‘liq tekshirildi va CHSB hisoboti tayyorlandi!**"
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
     except Exception as e:
         logger.error(f"Mode 4 Error: {e}", exc_info=True)
