@@ -1,21 +1,19 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 load_dotenv()
 
 # Telegram Bot Token
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
-# Gemini API Keys (comma-separated for multi-key rotation to avoid limits)
-# Example: GEMINI_API_KEYS="key1,key2,key3"
 raw_keys = os.getenv("GEMINI_API_KEYS", "") or os.getenv("GEMINI_API_KEY", "")
-GEMINI_KEYS = [k.strip() for k in raw_keys.split(",") if k.strip()]
+parsed_keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
 
-# Admin ID for errors / monitoring
+GEMINI_KEYS = parsed_keys
+
 ADMIN_ID = os.getenv("ADMIN_ID", "")
-
-# Channel for storing generated files copy (optional)
 ARCHIVE_CHANNEL_ID = os.getenv("ARCHIVE_CHANNEL_ID", "")
-
-# Rate limiting delay between Gemini requests (seconds)
-REQUEST_DELAY_SECONDS = float(os.getenv("REQUEST_DELAY_SECONDS", "4.0"))
+REQUEST_DELAY_SECONDS = float(os.getenv("REQUEST_DELAY_SECONDS", "3.0"))
