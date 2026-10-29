@@ -1,12 +1,13 @@
 import os
 import asyncio
 import logging
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import FSInputFile, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import FSInputFile
 
 from config import BOT_TOKEN, ARCHIVE_CHANNEL_ID
 from ai_service import ai_service
@@ -108,7 +109,6 @@ async def handle_criteria_photo(message: types.Message, state: FSMContext):
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nIltimos, rasmlarni aniqroq qilib qaytadan yuboring (/start).")
     finally:
         await state.clear()
-        # Clean up temp files
         for p in [journal_path, criteria_path]:
             if p and os.path.exists(p):
                 try:
@@ -116,10 +116,26 @@ async def handle_criteria_photo(message: types.Message, state: FSMContext):
                 except:
                     pass
 
+# Dummy web server to keep Render/Cloud hosts alive and healthy
+async def handle_ping(request):
+    return web.Response(text="BSB Hisobot Telegram Boti 24/7 rejimda muvaffaqiyatli ishlamoqda!")
+
 async def main():
     if not BOT_TOKEN:
         print("DIQQAT: .env faylida BOT_TOKEN ko'rsatilmagan!")
         return
+    
+    # Start web server for cloud platforms (Render, Railway, Koyeb)
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    app.router.add_get("/health", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"Web server port {port} da ishga tushdi.")
+
     logger.info("BSB Hisobot Telegram Boti ishga tushmoqda...")
     await dp.start_polling(bot)
 
