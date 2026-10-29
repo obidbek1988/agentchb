@@ -82,8 +82,16 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     for idx, st in enumerate(students, start=1):
         curr_row = start_row + idx - 1
         name = st.get("name", "")
-        task_scores = st.get("task_scores", [None]*5)
         tot = st.get("total_score")
+        task_scores = st.get("task_scores")
+
+        # If task_scores is missing, empty or all None, auto-distribute total_score across criteria!
+        if tot is not None and tot > 0:
+            if not task_scores or all(s is None for s in task_scores) or sum(s or 0 for s in task_scores) != tot:
+                from emaktab_parser import distribute_score_to_tasks
+                task_scores = distribute_score_to_tasks(tot, criteria)
+        else:
+            task_scores = [None] * len(criteria)
 
         c_a = ws.cell(row=curr_row, column=1, value=idx)
         c_a.alignment = Alignment(horizontal="center", vertical="center")

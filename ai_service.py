@@ -49,11 +49,14 @@ Rasmiy Baholash mezonlari:
 {crit_desc}
 Maksimal umumiy ball: {max_score}
 
-Vazifangiz:
-1. Jurnaldagi sinf nomi (masalan: 9-G, 10-B), fan va o'qituvchi ismini aniqlang.
-2. Barcha rasmlardagi barcha o'quvchilarning F.I.O va 1-BSB ballini (total_score) aniqlang.
-3. Agar o'quvchi darsda qatnashmagan bo'lsa yoki balli yo'q bo'lsa: total_score: null, task_scores: [null, null, null, null, null].
-4. Agar balli bo'lsa, uni yuqoridagi {len(criteria_list)} ta mezonning max_point lariga mos taqsimlang (yig'indisi total_score ga teng bo'lsin).
+JUDA MUHIM QOIDALAR (BSB USTUNIDAN BALLARNI OLISH):
+1. Chap ustun: O'quvchilarning To'liq ism-familiyasi.
+2. O'rtadagi kundalik dars baholari (Dj ustunlari: 10, 9, 8...) va davomat (K, S) - BULAR BSB BALI EMAS!
+3. DIQQAT BSB USTUNI: Jurnaldagi sanalar orasida yoki o'ngrog'ida 'BSB', '1-BSB' yoki 'BSB-1 [50 ball]' deb belgilangan alohida ustun bor (masalan: '17.10 BSB-1' yashil rangli katakchalar bilan).
+Aynan shu ustundagi ballarni oling (masalan: 44, 35, 44, 43, 38, 44...)!
+4. Har bir o'quvchi to'g'risidagi o'sha 'BSB' ustunidagi ballni 'total_score' ga aniq yozing.
+5. Agar o'quvchining BSB katagi bo'sh bo'lsa yoki qatnashmagan bo'lsa (K, S) -> total_score: null.
+6. Agar o'quvchida BSB bali bo'lsa (masalan 44, 35, 43...) -> total_score ga aynan o'sha sonni yozing!
 
 Quyidagi JSON formatida qaytaring:
 {{
@@ -82,6 +85,15 @@ Javob FAQAT sof JSON bo'lsin.
         if "school_info" in res:
             res["school_info"]["max_score"] = max_score
             res["school_info"]["subject"] = fixed_criteria_info.get("subject", "Informatika")
+
+        # Guarantee task_scores are accurately allocated in Python
+        from emaktab_parser import distribute_score_to_tasks, clean_score
+        for st in res.get("students", []):
+            raw_tot = st.get("total_score")
+            tot = clean_score(raw_tot)
+            st["total_score"] = tot
+            st["task_scores"] = distribute_score_to_tasks(tot, criteria_list)
+
         return res
 
     def _call_bsb_vision(self, journal_img_paths: Any, criteria_img_paths: Any) -> Dict[str, Any]:
@@ -93,10 +105,10 @@ Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
 Dastlabki {len(j_list)} ta rasm: eMaktab elektron jurnali skrinshotlari (barcha o'quvchilar va ularning BSB ballari).
 Keyingi {len(c_list)} ta rasm: Rasmiy Baholash mezoni jadvali (ko'nikmalar matni va ajratilgan ballar, bir nechta sahifa bo'lishi mumkin).
 
-Vazifangiz:
+JUDA MUHIM QOIDALAR (BSB USTUNIDAN BALLARNI OLISH):
 1. Mezon rasmlaridagi barcha mezonlarni to'liq aniqlang (har doim Bosh harf bilan boshlansin, oxiriga '\\n\\nJami: X ball' yozilsin).
-2. Jurnal rasmlaridagi barcha sahifalardagi o'quvchilarni ketma-ket birlashtirib, F.I.O va ballarini oling.
-3. Jurnaldagi 'total_score' mezonlarning 'max_point' lariga mos keladigan qilib 'task_scores' ga taqsimlansin (yig'indisi total_score ga teng bo'lsin).
+2. Jurnalda dars baholarini (Dj) EMAS, aynan 'BSB' / 'BSB-1' deb belgilangan ustundagi ballarni (masalan: 44, 35, 43, 38...) har bir o'quvchining 'total_score' siga oling!
+3. Agar o'quvchida BSB bali bo'lsa, 'total_score' ga aynan o'sha sonni yozing.
 
 Quyidagi JSON formatida qaytaring:
 {{
@@ -134,7 +146,19 @@ Quyidagi JSON formatida qaytaring:
 Javob FAQAT sof JSON bo'lsin.
 """
         all_imgs = j_list + c_list
-        return self._send_prompt_to_gemini(prompt, all_imgs)
+        res = self._send_prompt_to_gemini(prompt, all_imgs)
+
+        # Guarantee task_scores are accurately allocated in Python
+        from emaktab_parser import distribute_score_to_tasks, clean_score
+        c_list_parsed = res.get("criteria", [])
+        for st in res.get("students", []):
+            raw_tot = st.get("total_score")
+            tot = clean_score(raw_tot)
+            st["total_score"] = tot
+            if c_list_parsed:
+                st["task_scores"] = distribute_score_to_tasks(tot, c_list_parsed)
+
+        return res
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:

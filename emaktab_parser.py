@@ -10,8 +10,20 @@ import openpyxl
 import xlrd
 from cyrillic_translit import to_uzbek_latin
 
+def clean_score(val: Any) -> Optional[int]:
+    if val is None or val == "":
+        return None
+    if isinstance(val, (int, float)):
+        return int(round(val)) if val > 0 else None
+    s = str(val).strip().replace(",", ".")
+    try:
+        num = float(s)
+        return int(round(num)) if num > 0 else None
+    except (ValueError, TypeError):
+        return None
+
 def distribute_score_to_tasks(total_score: Optional[int], criteria: List[Dict[str, Any]]) -> List[Optional[int]]:
-    if total_score is None or total_score <= 0:
+    if total_score is None or total_score <= 0 or not criteria:
         return [None] * len(criteria)
     
     max_total = sum(c.get("max_point", 10) for c in criteria)
@@ -78,9 +90,9 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
     bsb_col = -1
     max_score = 50
     for c in range(sheet.ncols):
-        col_cells = [str(sheet.cell_value(r, c)) for r in range(5, 10)]
+        col_cells = [str(sheet.cell_value(r, c)) for r in range(min(20, sheet.nrows))]
         joined = " ".join(col_cells).upper()
-        if "BSB" in joined or "БСБ" in joined:
+        if "BSB" in joined or "БСБ" in joined or "CHSB" in joined or "ЧСБ" in joined:
             bsb_col = c
             for cell_val in col_cells:
                 m_score = re.search(r'\b(25|30|40|50)\b', cell_val)
@@ -95,8 +107,10 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
     # Find student rows
     students = []
     start_r = -1
-    for r in range(6, min(15, sheet.nrows)):
-        if "ism" in str(sheet.cell_value(r, 1)).lower() or "фамилия" in str(sheet.cell_value(r, 1)).lower():
+    for r in range(min(20, sheet.nrows)):
+        val_0 = str(sheet.cell_value(r, 0)).lower()
+        val_1 = str(sheet.cell_value(r, 1)).lower()
+        if "ism" in val_1 or "фамилия" in val_1 or "ism" in val_0 or "фамилия" in val_0:
             start_r = r + 1
             break
 
@@ -109,12 +123,7 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
             name = to_uzbek_latin(raw_name)
             
             score_val = sheet.cell_value(r, bsb_col)
-            tot = None
-            if isinstance(score_val, (int, float)) and score_val > 0:
-                tot = int(round(score_val))
-            elif str(score_val).strip().isdigit():
-                tot = int(str(score_val).strip())
-
+            tot = clean_score(score_val)
             task_scores = distribute_score_to_tasks(tot, criteria) if criteria else [None] * 5
 
             students.append({
@@ -166,9 +175,9 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
     bsb_col = -1
     max_score = 50
     for c in range(1, sheet.max_column + 1):
-        col_cells = [str(sheet.cell(r, c).value or "") for r in range(5, 11)]
+        col_cells = [str(sheet.cell(r, c).value or "") for r in range(1, min(20, sheet.max_row + 1))]
         joined = " ".join(col_cells).upper()
-        if "BSB" in joined or "БСБ" in joined:
+        if "BSB" in joined or "БСБ" in joined or "CHSB" in joined or "ЧСБ" in joined:
             bsb_col = c
             for cell_val in col_cells:
                 m_score = re.search(r'\b(25|30|40|50)\b', cell_val)
@@ -181,27 +190,25 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
 
     students = []
     start_r = -1
-    for r in range(6, min(16, sheet.max_row + 1)):
-        val = str(sheet.cell(r, 2).value or "").lower()
-        if "ism" in val or "фамилия" in val:
+    for r in range(1, min(20, sheet.max_row + 1)):
+        val_1 = str(sheet.cell(r, 1).value or "").lower()
+        val_2 = str(sheet.cell(r, 2).value or "").lower()
+        if "ism" in val_2 or "фамилия" in val_2 or "ism" in val_1 or "фамилия" in val_1:
             start_r = r + 1
             break
+
+    name_col = 2 if start_r != -1 and "ism" in str(sheet.cell(start_r-1, 2).value or "").lower() else 1
 
     if start_r != -1 and bsb_col != -1:
         tr = 1
         for r in range(start_r, sheet.max_row + 1):
-            raw_name = str(sheet.cell(r, 2).value or "").strip()
+            raw_name = str(sheet.cell(r, name_col).value or "").strip()
             if not raw_name or raw_name.isdigit() or len(raw_name) < 3:
                 continue
             name = to_uzbek_latin(raw_name)
 
             score_val = sheet.cell(r, bsb_col).value
-            tot = None
-            if isinstance(score_val, (int, float)) and score_val > 0:
-                tot = int(round(score_val))
-            elif str(score_val).strip().isdigit():
-                tot = int(str(score_val).strip())
-
+            tot = clean_score(score_val)
             task_scores = distribute_score_to_tasks(tot, criteria) if criteria else [None] * 5
 
             students.append({
