@@ -86,19 +86,18 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
             elif t_raw:
                 teacher_name = t_raw.split(",")[0].strip()
 
-    # Find BSB column
-    bsb_col = -1
+    # Find ALL BSB columns (there may be multiple, e.g. group 1, group 2 or 1-BSB / 2-BSB)
+    bsb_cols = []
     max_score = 50
     for c in range(sheet.ncols):
-        col_cells = [str(sheet.cell_value(r, c)) for r in range(min(20, sheet.nrows))]
+        col_cells = [str(sheet.cell_value(r, c)) for r in range(min(25, sheet.nrows))]
         joined = " ".join(col_cells).upper()
-        if "BSB" in joined or "БСБ" in joined or "CHSB" in joined or "ЧСБ" in joined:
-            bsb_col = c
+        if any(k in joined for k in ["BSB", "БСБ", "CHSB", "ЧСБ", "СУММАТИВ", "SUMMATIV"]):
+            bsb_cols.append(c)
             for cell_val in col_cells:
                 m_score = re.search(r'\b(25|30|40|50)\b', cell_val)
                 if m_score:
                     max_score = int(m_score.group(1))
-            break
 
     # If criteria is provided, criteria overrides max_score
     if criteria:
@@ -107,14 +106,24 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
     # Find student rows
     students = []
     start_r = -1
-    for r in range(min(20, sheet.nrows)):
+    for r in range(min(25, sheet.nrows)):
         val_0 = str(sheet.cell_value(r, 0)).lower()
         val_1 = str(sheet.cell_value(r, 1)).lower()
         if "ism" in val_1 or "фамилия" in val_1 or "ism" in val_0 or "фамилия" in val_0:
             start_r = r + 1
             break
 
-    if start_r != -1 and bsb_col != -1:
+    # If no BSB column was found by header, find columns with scores
+    if not bsb_cols and start_r != -1:
+        cand_counts = {}
+        for c in range(2, sheet.ncols):
+            cnt = sum(1 for r in range(start_r, sheet.nrows) if clean_score(sheet.cell_value(r, c)) is not None)
+            if cnt > 0:
+                cand_counts[c] = cnt
+        if cand_counts:
+            bsb_cols = sorted(cand_counts.keys(), key=lambda c: cand_counts[c], reverse=True)
+
+    if start_r != -1 and bsb_cols:
         tr = 1
         for r in range(start_r, sheet.nrows):
             raw_name = str(sheet.cell_value(r, 1)).strip()
@@ -122,8 +131,15 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
                 continue
             name = to_uzbek_latin(raw_name)
             
-            score_val = sheet.cell_value(r, bsb_col)
-            tot = clean_score(score_val)
+            # Check across all BSB columns: if first BSB column is empty, check the other BSB columns!
+            tot = None
+            for col in bsb_cols:
+                score_val = sheet.cell_value(r, col)
+                c_score = clean_score(score_val)
+                if c_score is not None and c_score > 0:
+                    tot = c_score
+                    break
+
             task_scores = distribute_score_to_tasks(tot, criteria) if criteria else [None] * 5
 
             students.append({
@@ -171,26 +187,25 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
             elif t_raw:
                 teacher_name = t_raw.split(",")[0].strip()
 
-    # Find BSB column
-    bsb_col = -1
+    # Find ALL BSB columns
+    bsb_cols = []
     max_score = 50
     for c in range(1, sheet.max_column + 1):
-        col_cells = [str(sheet.cell(r, c).value or "") for r in range(1, min(20, sheet.max_row + 1))]
+        col_cells = [str(sheet.cell(r, c).value or "") for r in range(1, min(25, sheet.max_row + 1))]
         joined = " ".join(col_cells).upper()
-        if "BSB" in joined or "БСБ" in joined or "CHSB" in joined or "ЧСБ" in joined:
-            bsb_col = c
+        if any(k in joined for k in ["BSB", "БСБ", "CHSB", "ЧСБ", "СУММАТИВ", "SUMMATIV"]):
+            bsb_cols.append(c)
             for cell_val in col_cells:
                 m_score = re.search(r'\b(25|30|40|50)\b', cell_val)
                 if m_score:
                     max_score = int(m_score.group(1))
-            break
 
     if criteria:
         max_score = sum(c.get("max_point", 10) for c in criteria)
 
     students = []
     start_r = -1
-    for r in range(1, min(20, sheet.max_row + 1)):
+    for r in range(1, min(25, sheet.max_row + 1)):
         val_1 = str(sheet.cell(r, 1).value or "").lower()
         val_2 = str(sheet.cell(r, 2).value or "").lower()
         if "ism" in val_2 or "фамилия" in val_2 or "ism" in val_1 or "фамилия" in val_1:
@@ -199,7 +214,16 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
 
     name_col = 2 if start_r != -1 and "ism" in str(sheet.cell(start_r-1, 2).value or "").lower() else 1
 
-    if start_r != -1 and bsb_col != -1:
+    if not bsb_cols and start_r != -1:
+        cand_counts = {}
+        for c in range(name_col + 1, sheet.max_column + 1):
+            cnt = sum(1 for r in range(start_r, sheet.max_row + 1) if clean_score(sheet.cell(r, c).value) is not None)
+            if cnt > 0:
+                cand_counts[c] = cnt
+        if cand_counts:
+            bsb_cols = sorted(cand_counts.keys(), key=lambda c: cand_counts[c], reverse=True)
+
+    if start_r != -1 and bsb_cols:
         tr = 1
         for r in range(start_r, sheet.max_row + 1):
             raw_name = str(sheet.cell(r, name_col).value or "").strip()
@@ -207,8 +231,15 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
                 continue
             name = to_uzbek_latin(raw_name)
 
-            score_val = sheet.cell(r, bsb_col).value
-            tot = clean_score(score_val)
+            # Check across all BSB columns: if first column is empty, check the other BSB columns!
+            tot = None
+            for col in bsb_cols:
+                score_val = sheet.cell(r, col).value
+                c_score = clean_score(score_val)
+                if c_score is not None and c_score > 0:
+                    tot = c_score
+                    break
+
             task_scores = distribute_score_to_tasks(tot, criteria) if criteria else [None] * 5
 
             students.append({
