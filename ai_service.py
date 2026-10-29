@@ -22,37 +22,21 @@ class AIService:
         self.current_key_idx += 1
         return key
 
+    # 1-TUGMA: BSB ballar bo'yicha
     async def parse_bsb_data(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
-        """
-        Parses journal image and criteria image using Gemini Vision with rate-limit queue.
-        Returns structured data for Excel generator.
-        """
         return await queue_manager.execute_with_rate_limit(
-            self._call_gemini_vision, journal_img_path, criteria_img_path
+            self._call_bsb_vision, journal_img_path, criteria_img_path
         )
 
-    def _call_gemini_vision(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
-        retries = 3
-        last_error = None
+    def _call_bsb_vision(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
+        prompt = """
+Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
+1-rasm: eMaktab elektron jurnali skrinshoti (o'quvchilar va ularning BSB ballari).
+2-rasm: Rasmiy Baholash mezoni jadvali (ko'nikmalar matni va ajratilgan ballar).
 
-        for attempt in range(retries):
-            key = self._get_next_key()
-            genai.configure(api_key=key)
-            
-            # Using Gemini 3.8 Flash model for fast multimodal vision
-            model = genai.GenerativeModel("gemini-3.8-flash")
-
-            prompt = """
-Siz umumta'lim maktablarining BSB (Baholash sinov topshiriqlari) hisobotlarini shakllantiruvchi yordamchisiz.
-Sizga 2 ta rasm berilmoqda:
-1-rasm: eMaktab (Kundalik) elektron jurnali skrinshoti (o'quvchilar ro'yxati va ularning BSB ballari ko'rsatilgan).
-2-rasm: Rasmiy Baholash mezoni jadvali (har bir topshiriq uchun baholanadigan ko'nikmalar matni va ajratilgan ballar).
-
-Iltimos, ushbu ikki rasmni juda sinchiklab tahlil qiling va quyidagi JSON formatida aniq ma'lumot qaytaring:
-
+Quyidagi JSON formatida qaytaring:
 {
   "school_info": {
-    "title": "BSB tahlil Bayonnomasi\\nFARG‘ONA viloyati FARG‘ONA SHAHRI 26-umumta’lim maktabi",
     "class_name": "10-B",
     "subject": "Informatika",
     "quarter": 1,
@@ -64,7 +48,7 @@ Iltimos, ushbu ikki rasmni juda sinchiklab tahlil qiling va quyidagi JSON format
   "criteria": [
     {
       "task_number": 1,
-      "skill_text": "Maʼlumot, axborot va bilimlar bazasi oʻrtasidagi farqlarni tushunadi; Statik va dinamik maʼlumotlarni taʼriflay oladi; Axborotning sifatini tahlil qila oladi;\\n\\nJami: 10 ball",
+      "skill_text": "Maʼlumot, axborot va bilimlar bazasi oʻrtasidagi farqlarni tushunadi;\\n\\nJami: 10 ball",
       "max_point": 10
     }
   ],
@@ -83,19 +67,162 @@ Iltimos, ushbu ikki rasmni juda sinchiklab tahlil qiling va quyidagi JSON format
     }
   ]
 }
-
-MUHIM QOIDALAR:
-1. "criteria" ro'yxatida har bir topshiriqning mezoni Katta harf bilan boshlansin, oxiriga "\\n\\nJami: X ball" deb aniq balli yozilsin. Ortiqcha "1-topshiriq" deb boshlanmasin, to'g'ridan-to'g'ri ko'nikma matni yozilsin.
-2. "students" ro'yxatida o'quvchining jurnaldagi umumiy BSB balli ("total_score") ma'lum bo'lsa, uni mezonlarning "max_point" lariga to'liq mos keladigan qilib "task_scores" 5 ta topshiriqqa mantiqiy taqsimlang (yig'indisi aynan "total_score" bo'lsin).
-3. Agar o'quvchiga ball qo'yilmagan bo'lsa (qatnashmagan bo'lsa), "total_score": null va "task_scores": [null, null, null, null, null] bo'lsin.
-4. Javobingiz FAQAT sof JSON bo'lsin, hech qanday markdown kod bloklarisiz (faqat { ... }).
+MUHIM:
+1. Mezonlar har doim Bosh harf bilan boshlansin, oxiriga '\\n\\nJami: X ball' yozilsin.
+2. Jurnaldagi 'total_score' mezonlarning 'max_point' lariga mos keladigan qilib 'task_scores' ga taqsimlansin (yig'indisi total_score ga teng bo'lsin).
+3. Javob FAQAT sof JSON bo'lsin.
 """
+        return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
+
+    # 2-TUGMA: BSB o'quvchilar ishini tekshirish
+    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str]) -> Dict[str, Any]:
+        return await queue_manager.execute_with_rate_limit(
+            self._call_eval_works_vision, criteria_img_path, work_img_paths
+        )
+
+    def _call_eval_works_vision(self, criteria_img_path: str, work_img_paths: List[str]) -> Dict[str, Any]:
+        prompt = """
+Siz tajribali o'qituvchisiz.
+1-rasm: BSB Baholash mezonlari (savollar, topshiriqlar va baholash mezonlari).
+Keyingi rasmlar: O'quvchilarning daftardagi yoki qog'ozdagi yozma ishlari.
+
+Har bir o'quvchining ishini mezonga qarab tekshiring:
+- O'quvchining ism-familiyasini aniqlang;
+- Har bir topshiriq uchun to'g'riligiga qarab ball bering;
+- Jami to'plagan ballini hisoblang.
+
+Quyidagi JSON formatida qaytaring:
+{
+  "school_info": {
+    "class_name": "10-B",
+    "subject": "Informatika",
+    "quarter": 1,
+    "bsb_number": 1,
+    "max_score": 50,
+    "teacher_name": "Qobilov Obidjon",
+    "head_teacher": "Mahmudova Dilfuzaxon"
+  },
+  "criteria": [
+    {
+      "task_number": 1,
+      "skill_text": "Maʼlumot, axborot va bilimlar bazasi oʻrtasidagi farqlarni tushunadi;\\n\\nJami: 10 ball",
+      "max_point": 10
+    }
+  ],
+  "students": [
+    {
+      "tr": 1,
+      "name": "O'quvchi F.I.O",
+      "total_score": 42,
+      "task_scores": [10, 8, 9, 8, 7]
+    }
+  ]
+}
+Javob FAQAT sof JSON bo'lsin.
+"""
+        all_imgs = [criteria_img_path] + work_img_paths
+        return self._send_prompt_to_gemini(prompt, all_imgs)
+
+    # 3-TUGMA: CHSB ballar bo'yicha (B, Q, M mezonlari)
+    async def parse_chsb_data(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
+        return await queue_manager.execute_with_rate_limit(
+            self._call_chsb_vision, journal_img_path, criteria_img_path
+        )
+
+    def _call_chsb_vision(self, journal_img_path: str, criteria_img_path: str) -> Dict[str, Any]:
+        prompt = """
+Siz CHSB hisobotini shakllantiruvchi yordamchisiz.
+1-rasm: eMaktab elektron jurnali (CHSB 40 ballik ko'rsatilgan).
+2-rasm: CHSB Baholash mezonlari.
+
+CHSB odatda 3 ta mezondan iborat:
+(B) - Bilish (6 ball)
+(Q) - Qo'llash (24 ball)
+(M) - Mulohaza (10 ball)
+Jami: 40 ball.
+
+O'quvchilarning 40 ballik jurnaldagi ballini ushbu 3 ta mezon [B, Q, M] ga to'g'ri taqsimlang.
+Quyidagi JSON formatida qaytaring:
+{
+  "school_info": {
+    "class_name": "6-G",
+    "subject": "Informatika",
+    "quarter": 2,
+    "chsb_number": 2,
+    "max_score": 40,
+    "teacher_name": "Qobilov Obidjon",
+    "head_teacher": "Mahmudova Dilfuzaxon"
+  },
+  "students": [
+    {
+      "tr": 1,
+      "name": "Abduxalilova Ruxshona",
+      "total_score": 36,
+      "task_scores": [4, 22, 10]
+    }
+  ]
+}
+Javob FAQAT sof JSON bo'lsin.
+"""
+        return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
+
+    # 4-TUGMA: CHSB Testlarni tekshirish
+    async def evaluate_test_answers(self, keys_img_path: str, student_test_img_paths: List[str]) -> Dict[str, Any]:
+        return await queue_manager.execute_with_rate_limit(
+            self._call_eval_tests_vision, keys_img_path, student_test_img_paths
+        )
+
+    def _call_eval_tests_vision(self, keys_img_path: str, student_test_img_paths: List[str]) -> Dict[str, Any]:
+        prompt = """
+Siz test javoblarini tekshiruvchi mutaxassissiz.
+1-rasm: CHSB test savollarining to'g'ri javoblari kaliti (masalan: 1-A, 2-D, 3-C...) va mezonlari.
+Keyingi rasmlar: O'quvchilarning belgilagan test javoblari varaqalari (A, B, C, D).
+
+Vazifangiz:
+Har bir o'quvchining belgilagan javoblarini to'g'ri kalit bilan solishtirib tekshiring:
+- O'quvchi F.I.O;
+- To'g'ri topilgan testlar ballarini hisoblang: (B) Bilish, (Q) Qo'llash, (M) Mulohaza mezonlari bo'yicha ajrating;
+- Jami to'plagan ballini hisoblang (maksimal 40 ball).
+
+Quyidagi JSON formatida qaytaring:
+{
+  "school_info": {
+    "class_name": "6-G",
+    "subject": "Informatika",
+    "quarter": 2,
+    "chsb_number": 2,
+    "max_score": 40,
+    "teacher_name": "Qobilov Obidjon",
+    "head_teacher": "Mahmudova Dilfuzaxon"
+  },
+  "students": [
+    {
+      "tr": 1,
+      "name": "O'quvchi F.I.O",
+      "total_score": 34,
+      "task_scores": [6, 20, 8]
+    }
+  ]
+}
+Javob FAQAT sof JSON bo'lsin.
+"""
+        all_imgs = [keys_img_path] + student_test_img_paths
+        return self._send_prompt_to_gemini(prompt, all_imgs)
+
+    def _send_prompt_to_gemini(self, prompt: str, img_paths: List[str]) -> Dict[str, Any]:
+        retries = 3
+        last_error = None
+
+        for attempt in range(retries):
+            key = self._get_next_key()
+            genai.configure(api_key=key)
+            model = genai.GenerativeModel("gemini-3.8-flash")
+
+            loaded_imgs = [Image.open(p) for p in img_paths]
+            content = [prompt] + loaded_imgs
 
             try:
-                img_journal = Image.open(journal_img_path)
-                img_criteria = Image.open(criteria_img_path)
-                
-                response = model.generate_content([prompt, img_journal, img_criteria])
+                response = model.generate_content(content)
                 txt = response.text.strip()
                 if txt.startswith("```json"):
                     txt = txt[7:]
@@ -103,16 +230,14 @@ MUHIM QOIDALAR:
                     txt = txt[3:]
                 if txt.endswith("```"):
                     txt = txt[:-3]
-                
-                data = json.loads(txt.strip())
-                return data
+
+                return json.loads(txt.strip())
             except Exception as e:
                 logger.warning(f"Attempt {attempt+1} failed with key ...{key[-4:]}: {e}")
                 last_error = e
-                # Wait briefly before retry
                 import time
-                time.sleep(2.5)
+                time.sleep(3.0)
 
-        raise RuntimeError(f"Gemini so'rovi bajarilmadi. Oxirgi xato: {last_error}")
+        raise RuntimeError(f"Gemini so'rovi bajarilmadi: {last_error}")
 
 ai_service = AIService()
