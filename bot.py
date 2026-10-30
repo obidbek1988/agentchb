@@ -22,6 +22,7 @@ from queue_manager import queue_manager
 from excel_service import build_bsb_excel, build_chsb_excel
 from criteria_store import get_criteria_for_grade, format_criteria_preview
 from emaktab_parser import parse_emaktab_file
+from pdf_utils import pdf_to_images
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -236,8 +237,33 @@ async def handle_custom_criteria(callback: CallbackQuery, state: FSMContext):
 @dp.message(BotStates.m1_journal_fixed, F.document)
 async def mode1_fixed_document(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
+    
+    # PDF fayl bo'lsa
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m1_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 PDF qabul qilindi, sahifalari o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            data = await state.get_data()
+            j_list = data.get("journal_paths", [])
+            j_list.extend(images)
+            await state.update_data(journal_paths=j_list)
+            await status_pdf.delete()
+            await message.answer(
+                f"📥 **PDF dan {len(images)} ta sahifa muvaffaqiyatli olindi!**\n\n"
+                f"• Yana rasm/PDF bo‘lsa yuboring;\n"
+                f"• Tugagan bo‘lsa, **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+                reply_markup=get_action_keyboard(show_finish=True)
+            )
+        except Exception as e:
+            logger.error(f"PDF convert error: {e}")
+            await message.answer("❌ PDF faylni o‘qishda xatolik yuz berdi. Iltimos, rasm yoki Excel yuboring.")
+        return
+
     if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
-        await message.answer("Iltimos, eMaktab elektron jurnalini .xlsx yoki .xls formatda yuboring.")
+        await message.answer("Iltimos, eMaktab elektron jurnalini Excel (.xlsx, .xls) yoki PDF formatda yuboring.")
         return
 
     data = await state.get_data()
@@ -338,6 +364,49 @@ async def mode1_fixed_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 1-REJIM: BOSHQACHA/YANGI MEZON BILAN ISHLASH ====================
+@dp.message(BotStates.m1_journal, F.document)
+async def mode1_journal_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m1_custom_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 PDF qabul qilindi, sahifalari o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            data = await state.get_data()
+            j_list = data.get("journal_paths", [])
+            j_list.extend(images)
+            await state.update_data(journal_paths=j_list)
+            await status_pdf.delete()
+            await message.answer(
+                f"📥 **PDF dan {len(images)} ta sahifa muvaffaqiyatli olindi!**\n\n"
+                f"• Yana jurnal rasmi/PDF bo‘lsa yuboring;\n"
+                f"• Jurnal tugagan bo‘lsa, pastdagi **'✅ Jurnal tugadi, mezonga o‘tish'** tugmasini bosing:",
+                reply_markup=ReplyKeyboardMarkup(
+                    keyboard=[[KeyboardButton(text="✅ Jurnal tugadi, mezonga o‘tish")], [KeyboardButton(text="❌ Bekor qilish")]],
+                    resize_keyboard=True
+                )
+            )
+        except Exception as e:
+            logger.error(f"Mode 1 Custom PDF error: {e}")
+            await message.answer("❌ PDF faylni o‘qishda xatolik yuz berdi. Iltimos, rasm yoki Excel yuboring.")
+    elif fname.endswith(".xlsx") or fname.endswith(".xls"):
+        # Excel direct in custom mode
+        os.makedirs("temp", exist_ok=True)
+        ext = ".xls" if fname.endswith(".xls") else ".xlsx"
+        fpath = f"temp/m1_custom_doc_{message.from_user.id}_{message.message_id}{ext}"
+        await bot.download(message.document, destination=fpath)
+        await state.update_data(excel_journal_path=fpath)
+        await state.set_state(BotStates.m1_criteria)
+        await message.answer(
+            f"✅ **eMaktab elektron jurnali ({fname}) qabul qilindi!**\n\n"
+            "2-qadam: Endi ushbu fan BSB ning **Baholash mezoni rasmini yoki PDF faylini** yuboring:",
+            reply_markup=get_action_keyboard(show_finish=True)
+        )
+    else:
+        await message.answer("Iltimos, elektron jurnalni Excel (.xlsx/.xls), PDF yoki rasm ko‘rinishida yuboring.")
+
 @dp.message(BotStates.m1_journal, F.photo)
 async def mode1_journal(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
@@ -371,6 +440,33 @@ async def mode1_journal_done(message: types.Message, state: FSMContext):
         "2-qadam: Endi ushbu BSB ning **Baholash mezoni rasmlarini** yuboring (1 yoki 2 sahifa bo‘lsa ham ketma-ket yuboring):",
         reply_markup=get_action_keyboard(show_finish=True)
     )
+
+@dp.message(BotStates.m1_criteria, F.document)
+async def mode1_criteria_document(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m1_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, sahifalari o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            data = await state.get_data()
+            c_list = data.get("criteria_paths", [])
+            c_list.extend(images)
+            await state.update_data(criteria_paths=c_list)
+            await status_pdf.delete()
+            await message.answer(
+                f"📥 **Mezon PDF dan {len(images)} ta sahifa muvaffaqiyatli olindi!**\n\n"
+                f"• Yana rasm/PDF bo‘lsa yuboring;\n"
+                f"• Tugagan bo‘lsa, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+                reply_markup=get_action_keyboard(show_finish=True)
+            )
+        except Exception as e:
+            logger.error(f"Mode 1 Criteria PDF error: {e}")
+            await message.answer("❌ PDF mezonni o‘qishda xatolik yuz berdi. Iltimos, rasm ko‘rinishida yuboring.")
+    else:
+        await message.answer("Iltimos, baholash mezonini rasm yoki PDF formatida yuboring.")
 
 @dp.message(BotStates.m1_criteria, F.photo)
 async def mode1_criteria_photo(message: types.Message, state: FSMContext):
@@ -440,9 +536,37 @@ async def mode2_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m2_criteria)
     await message.answer(
         "✍️ **2-REJIM: BSB o‘quvchilar ishini tekshirish**\n\n"
-        "1-qadam: BSB **savollari va baholash mezonlari rasmini** yuboring:",
-        reply_markup=get_action_keyboard()
+        "1-qadam: BSB **savollari va baholash mezonlari rasmini yoki PDF faylini** yuboring:",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m2_criteria, F.document)
+async def mode2_criteria_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m2_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            cpath = images[0] if images else pdf_path
+            await state.update_data(criteria_path=cpath, works_paths=[])
+            await status_pdf.delete()
+            await state.set_state(BotStates.m2_works)
+            await message.answer(
+                "✅ Mezon PDF qabul qilindi!\n\n"
+                "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini yoki PDF fayllarini** yuboring (ketma-ket yuboravering).\n\n"
+                "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+                reply_markup=get_action_keyboard(show_finish=True),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Mode 2 Criteria PDF error: {e}")
+            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
+    else:
+        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
 
 @dp.message(BotStates.m2_criteria, F.photo)
 async def mode2_criteria(message: types.Message, state: FSMContext):
@@ -454,10 +578,34 @@ async def mode2_criteria(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m2_works)
     await message.answer(
         "✅ Mezon qabul qilindi!\n\n"
-        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
+        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini yoki PDF fayllarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
         "Barcha rasmlarni yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-        reply_markup=get_action_keyboard(show_finish=True)
+        reply_markup=get_action_keyboard(show_finish=True),
+        parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m2_works, F.document)
+async def mode2_works_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m2_w_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            images = pdf_to_images(pdf_path)
+            data = await state.get_data()
+            wlist = data.get("works_paths", [])
+            wlist.extend(images)
+            await state.update_data(works_paths=wlist)
+            await message.answer(
+                f"📥 PDF dan {len(images)} ta sahifa qo‘shildi (Jami ishlar: {len(wlist)} ta). Yana yuboring yoki 'Tayyorlang' tugmasini bosing.",
+                reply_markup=get_action_keyboard(show_finish=True)
+            )
+        except Exception as e:
+            logger.error(f"Mode 2 Works PDF error: {e}")
+            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi.")
+    else:
+        await message.answer("Iltimos, o‘quvchi ishlarini rasm yoki PDF ko‘rinishida yuboring.")
 
 @dp.message(BotStates.m2_works, F.photo)
 async def mode2_photo(message: types.Message, state: FSMContext):
@@ -514,7 +662,7 @@ async def mode3_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m3_journal)
     await message.answer(
         "📊 **3-REJIM: CHSB (Ballar orqali hisobot)**\n\n"
-        "1-qadam: eMaktab elektron jurnali **Excel (.xlsx/.xls) faylini** yoki **skrinshotini** (CHSB 40 ballik ustuni bilan) yuboring:\n"
+        "1-qadam: eMaktab elektron jurnali **Excel (.xlsx/.xls) faylini**, **PDF faylini** yoki **skrinshotini** (CHSB 40 ballik ustuni bilan) yuboring:\n"
         "*(Excel fayl bo‘lsa 100% xatosiz va darhol tayyor bo‘ladi!)*",
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
@@ -523,8 +671,32 @@ async def mode3_start(message: types.Message, state: FSMContext):
 @dp.message(BotStates.m3_journal, F.document)
 async def mode3_journal_document(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
+    
+    # If PDF
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m3_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 CHSB jurnali PDF qabul qilindi, sahifalari o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            jpath = images[0] if images else pdf_path
+            await state.update_data(journal_path=jpath)
+            await status_pdf.delete()
+            await state.set_state(BotStates.m3_criteria)
+            await message.answer(
+                "✅ Jurnal PDF qabul qilindi!\n\n"
+                "2-qadam: Ushbu CHSB ning **Baholash mezoni skrinshotini yoki PDF faylini** yuboring:",
+                reply_markup=get_action_keyboard(),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Mode 3 PDF error: {e}")
+            await message.answer("❌ PDF faylni o‘qishda xatolik yuz berdi. Iltimos, rasm yoki Excel yuboring.")
+        return
+
     if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
-        await message.answer("Iltimos, eMaktab elektron jurnalini .xlsx yoki .xls formatda yuboring.")
+        await message.answer("Iltimos, eMaktab elektron jurnalini Excel (.xlsx, .xls) yoki PDF formatda yuboring.")
         return
 
     status_msg = await message.answer(f"⏳ CHSB elektron jurnali ({fname}) to‘g‘ridan-to‘g‘ri o‘qilmoqda...")
@@ -571,9 +743,50 @@ async def mode3_journal(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m3_criteria)
     await message.answer(
         "✅ Jurnal qabul qilindi!\n\n"
-        "2-qadam: Ushbu CHSB ning **Baholash mezoni skrinshotini** yuboring:",
-        reply_markup=get_action_keyboard()
+        "2-qadam: Ushbu CHSB ning **Baholash mezoni skrinshotini yoki PDF faylini** yuboring:",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m3_criteria, F.document)
+async def mode3_criteria_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m3_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            images = pdf_to_images(pdf_path)
+            cpath = images[0] if images else pdf_path
+            
+            pos, eta = queue_manager.get_queue_info()
+            queue_msg = f"⏳ Navbatdagi o‘rningiz: №{pos} (kutilmoqda: ~{eta}s)..." if pos > 1 else "⏳ CHSB (B, Q, M) tahlil qilinmoqda..."
+            status_msg = await message.answer(queue_msg)
+
+            data = await state.get_data()
+            jpath = data.get("journal_path")
+
+            parsed = await ai_service.parse_chsb_data(jpath, cpath)
+            cname = parsed.get("school_info", {}).get("class_name", "sinf")
+            out_excel = f"temp/{message.from_user.id}_{cname}_chsb.xlsx"
+            build_chsb_excel(parsed, out_excel)
+
+            doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_hisobot.xlsx")
+            cap = (
+                f"🎉 **{cname} sinf CHSB hisoboti tayyor!**\n"
+                f"• (B) Bilish (6 ball), (Q) Qo‘llash (24 ball), (M) Mulohaza (10 ball) taqsimlangan."
+                f"{FEEDBACK_NOTE}"
+            )
+            await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+            await send_to_archive(out_excel, f"📁 Yangi CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
+            await status_msg.delete()
+        except Exception as e:
+            logger.error(f"Mode 3 Criteria PDF error: {e}", exc_info=True)
+            await message.answer(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
+        finally:
+            await state.clear()
+    else:
+        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
 
 @dp.message(BotStates.m3_criteria, F.photo)
 async def mode3_criteria(message: types.Message, state: FSMContext):
@@ -616,9 +829,37 @@ async def mode4_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m4_keys)
     await message.answer(
         "🎯 **4-REJIM: CHSB Testlarni tekshirish va hisobot tuzish**\n\n"
-        "1-qadam: Testning **to‘g‘ri javoblar kaliti va mezoni rasmini** yuboring:",
-        reply_markup=get_action_keyboard()
+        "1-qadam: Testning **to‘g‘ri javoblar kaliti va mezoni rasmini yoki PDF faylini** yuboring:",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m4_keys, F.document)
+async def mode4_keys_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m4_k_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 Kalit/Mezon PDF qabul qilindi, o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            kpath = images[0] if images else pdf_path
+            await state.update_data(keys_path=kpath, test_paths=[])
+            await status_pdf.delete()
+            await state.set_state(BotStates.m4_student_tests)
+            await message.answer(
+                "✅ Test kaliti PDF qabul qilindi!\n\n"
+                "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF fayllarini** yuboring (ketma-ket yuboravering).\n\n"
+                "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+                reply_markup=get_action_keyboard(show_finish=True),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Mode 4 Keys PDF error: {e}")
+            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
+    else:
+        await message.answer("Iltimos, test kalitini rasm yoki PDF formatida yuboring.")
 
 @dp.message(BotStates.m4_keys, F.photo)
 async def mode4_keys(message: types.Message, state: FSMContext):
@@ -630,10 +871,34 @@ async def mode4_keys(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m4_student_tests)
     await message.answer(
         "✅ Test kaliti qabul qilindi!\n\n"
-        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
+        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF fayllarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
         "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-        reply_markup=get_action_keyboard(show_finish=True)
+        reply_markup=get_action_keyboard(show_finish=True),
+        parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m4_student_tests, F.document)
+async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m4_t_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            images = pdf_to_images(pdf_path)
+            data = await state.get_data()
+            tlist = data.get("test_paths", [])
+            tlist.extend(images)
+            await state.update_data(test_paths=tlist)
+            await message.answer(
+                f"📥 PDF dan {len(images)} ta sahifa qo‘shildi (Jami testlar: {len(tlist)} ta). Yana yuboring yoki 'Tayyorlang' tugmasini bosing.",
+                reply_markup=get_action_keyboard(show_finish=True)
+            )
+        except Exception as e:
+            logger.error(f"Mode 4 Test PDF error: {e}")
+            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi.")
+    else:
+        await message.answer("Iltimos, o‘quvchilar test varaqalarini rasm yoki PDF formatida yuboring.")
 
 @dp.message(BotStates.m4_student_tests, F.photo)
 async def mode4_photo(message: types.Message, state: FSMContext):
