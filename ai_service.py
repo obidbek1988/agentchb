@@ -27,6 +27,60 @@ class AIService:
             logger.warning(f"Error optimizing image {path}: {e}")
             return Image.open(path)
 
+    async def parse_journal_averages(self, journal_path: str) -> Dict[str, float]:
+        if not journal_path or not os.path.exists(journal_path):
+            return {}
+
+        fname = journal_path.lower()
+        if fname.endswith(".xlsx") or fname.endswith(".xls"):
+            try:
+                import openpyxl, re
+                wb = openpyxl.load_workbook(journal_path, data_only=True)
+                sheet = wb.active
+                res = {}
+                for r in range(1, sheet.max_row + 1):
+                    name_val = str(sheet.cell(r, 2).value or "").strip()
+                    words = name_val.split()
+                    if len(words) >= 2 and not any(k in name_val.lower() for k in ["familiya", "sharifi", "f.i.o", "o‘quvchi", "sinf", "tahlil", "viloyat"]):
+                        grades = []
+                        for c in range(3, sheet.max_column + 1):
+                            val = sheet.cell(r, c).value
+                            if val is not None:
+                                try:
+                                    s = str(val).replace(",", ".")
+                                    num = float(re.findall(r"^[0-9]+(?:\.[0-9]+)?", s)[0])
+                                    if 1 <= num <= 50:
+                                        grades.append(num)
+                                except:
+                                    pass
+                        if grades:
+                            avg = round(sum(grades) / len(grades), 1)
+                            res[name_val] = avg
+                if res:
+                    return res
+            except Exception as e:
+                logger.warning(f"Excel journal parse error: {e}")
+
+        # If image, PDF or excel fallback, use Gemini
+        prompt = """
+Ushbu eMaktab elektron jurnali sahifasidagi barcha o'quvchilarning ism-familiyasi va ularning darslardagi baholari o'rtachasini (1-10 ballik tizim bo'yicha) aniqlang.
+Quyidagi JSON formatida qaytaring:
+{
+  "students": [
+    {"name": "Abduxamidov Umidjon", "avg": 7.6},
+    {"name": "Ergashova Shaxnozaxon", "avg": 9.0}
+  ]
+}
+Javob FAQAT sof JSON bo'lsin.
+"""
+        try:
+            res = await queue_manager.execute_task(self._send_prompt_to_gemini, prompt, [journal_path])
+            st_list = res.get("students", [])
+            return {st.get("name"): float(st.get("avg", 7.0)) for st in st_list if st.get("name")}
+        except Exception as ge:
+            logger.error(f"Gemini journal parse error: {ge}")
+            return {}
+
     def __init__(self):
         self.keys = GEMINI_KEYS
         self.current_key_idx = 0
@@ -178,7 +232,7 @@ Javob FAQAT sof JSON bo'lsin.
         return res
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
-    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False) -> Dict[str, Any]:
+    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
         batch_size = 8
         all_students = []
         final_info = {}
@@ -192,7 +246,7 @@ Javob FAQAT sof JSON bo'lsin.
                 percent = int((current_count / total_works) * 100)
                 await progress_callback(f"⏳ Tekshirilmoqda: {current_count} / {total_works} ta o‘quvchi ({percent}%)...")
 
-            res = await queue_manager.execute_task(self._call_eval_works_vision, criteria_img_path, batch, start_tr=i+1, keys_input=keys_input, is_text_key=is_text_key)
+            res = await queue_manager.execute_task(self._call_eval_works_vision, criteria_img_path, batch, start_tr=i+1, keys_input=keys_input, is_text_key=is_text_key, journal_averages=journal_averages, is_adjusted=is_adjusted)
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
             if not criteria_list and "criteria" in res:
@@ -215,7 +269,7 @@ Javob FAQAT sof JSON bo'lsin.
             "students": all_students
         }
 
-    def _call_eval_works_vision(self, criteria_img_path: str, work_img_paths: List[str], start_tr: int = 1, keys_input: str = "", is_text_key: bool = False) -> Dict[str, Any]:
+    def _call_eval_works_vision(self, criteria_img_path: str, work_img_paths: List[str], start_tr: int = 1, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
         all_imgs = []
         if criteria_img_path and os.path.exists(criteria_img_path):
             all_imgs.append(criteria_img_path)
@@ -236,10 +290,29 @@ Javob FAQAT sof JSON bo'lsin.
 
         all_imgs.extend(work_img_paths)
 
+        adj_desc = ""
+        if is_adjusted and journal_averages:
+            avg_lines = [f"• {name}: dars o'rtacha bahosi {score}" for name, score in list(journal_averages.items())[:35]]
+            adj_desc = f"""
+MUHIM VAZIFA — DARSDAGI O'RTACHA BAHOGA MOSLASHTIRISH:
+O'quvchilarning eMaktab jurnali bo'yicha darslardagi o'rtacha baholari:
+{chr(10).join(avg_lines)}
+
+50 ballik BSB baholash qoidasi:
+1) Jurnaldagi o'rtacha bahosi 9.0–10.0 (5 baho, a'lochi) bo'lsa -> BSB bali 43 dan 50 ballgacha berilsin;
+2) Jurnaldagi o'rtacha bahosi 7.0–8.9 (4 baho, yaxshi) bo'lsa -> BSB bali 33 dan 42 ballgacha berilsin (agar o'quvchi 50 ballik yechgan bo'lsa ham, ko'chirish ehtimoli inobatga olinib 33-42 ball oralig'iga moslansin va izohda qaysi topshiriq xato qilingani yozilsin!);
+3) Jurnaldagi o'rtacha bahosi 5.0–6.9 (3 baho, qoniqarli) bo'lsa -> BSB bali 15 dan 32 ballgacha berilsin;
+4) Jurnaldagi o'rtacha bahosi 0–4.9 (2 baho, qoniqarsiz) bo'lsa -> BSB bali 0 dan 12 ballgacha berilsin.
+
+Har bir o'quvchi uchun 'note' (Izoh) ustuniga:
+"Dars o'rtachasi: X.X (Y baho). BSB bali: Z ballga moslashtirildi. 1-3 topshiriq to'liq, 4-topshiriq xato (-Kb) belgilandi."
+"""
+
         prompt = f"""
 Siz tajribali o'qituvchisiz.
 {crit_desc}
 {key_desc}
+{adj_desc}
 Keyingi rasmlar: O'quvchilarning daftardagi yoki qog'ozdagi yozma ishlari.
 
 Har bir o'quvchining ishini mezonga va to'g'ri javoblar kalitiga qarab tekshiring:
@@ -325,7 +398,7 @@ Javob FAQAT sof JSON bo'lsin.
         return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
 
     # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
-    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False) -> Dict[str, Any]:
+    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
         batch_size = 10
         all_students = []
         final_info = {}
@@ -338,7 +411,7 @@ Javob FAQAT sof JSON bo'lsin.
                 percent = int((current_count / total_tests) * 100)
                 await progress_callback(f"⏳ Testlar tekshirilmoqda: {current_count} / {total_tests} ta o‘quvchi ({percent}%)...")
 
-            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_input, batch, start_tr=i+1, is_text_key=is_text_key, criteria_input=criteria_input, is_text_criteria=is_text_criteria)
+            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_input, batch, start_tr=i+1, is_text_key=is_text_key, criteria_input=criteria_input, is_text_criteria=is_text_criteria, journal_averages=journal_averages, is_adjusted=is_adjusted)
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
 
@@ -357,7 +430,7 @@ Javob FAQAT sof JSON bo'lsin.
             "students": all_students
         }
 
-    def _call_eval_tests_vision(self, keys_input: str, student_test_img_paths: List[str], start_tr: int = 1, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False) -> Dict[str, Any]:
+    def _call_eval_tests_vision(self, keys_input: str, student_test_img_paths: List[str], start_tr: int = 1, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
         all_imgs = []
 
         # 1. Criteria description
@@ -383,10 +456,29 @@ Javob FAQAT sof JSON bo'lsin.
 
         all_imgs.extend(student_test_img_paths)
 
+        adj_desc = ""
+        if is_adjusted and journal_averages:
+            avg_lines = [f"• {name}: dars o'rtacha bahosi {score}" for name, score in list(journal_averages.items())[:35]]
+            adj_desc = f"""
+MUHIM VAZIFA — DARSDAGI O'RTACHA BAHOGA MOSLASHTIRISH:
+O'quvchilarning eMaktab jurnali bo'yicha darslardagi o'rtacha baholari:
+{chr(10).join(avg_lines)}
+
+40 ballik CHSB (15 ta test) baholash qoidasi:
+1) Jurnaldagi o'rtacha bahosi 9.0–10.0 (5 baho, a'lochi) bo'lsa -> CHSB bali 35 dan 40 ballgacha berilsin;
+2) Jurnaldagi o'rtacha bahosi 7.0–8.9 (4 baho, yaxshi) bo'lsa -> CHSB bali 27 dan 34 ballgacha berilsin (agar 40 ball yechgan bo'lsa ham, ko'chirish ehtimoli inobatga olinib 27-34 ball oralig'iga moslansin va izohda qaysi testlar xato qilib ko'rsatilgani yozilsin!);
+3) Jurnaldagi o'rtacha bahosi 5.0–6.9 (3 baho, qoniqarli) bo'lsa -> CHSB bali 13 dan 26 ballgacha berilsin;
+4) Jurnaldagi o'rtacha bahosi 0–4.9 (2 baho, qoniqarsiz) bo'lsa -> CHSB bali 0 dan 12 ballgacha berilsin.
+
+Har bir o'quvchi uchun 'note' (Izoh) ustuniga:
+"Dars o'rtachasi: X.X (Y baho). CHSB bali: Z ballga moslashtirildi. N ta to'g'ri, M ta xato (falon testlar)."
+"""
+
         prompt = f"""
 Siz test javoblarini tekshiruvchi mutaxassissiz.
 {crit_desc}
 {key_desc}
+{adj_desc}
 Keyingi rasmlar: O'quvchilarning belgilagan test javoblari varaqalari rasmlari.
 
 Vazifangiz:
