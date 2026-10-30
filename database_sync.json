@@ -1,5 +1,15 @@
 {
-  "users": [],
+  "users": [
+    {
+      "user_id": 6580113791,
+      "username": "Obidbek1988",
+      "full_name": "👑OBIDBEK GARANT ADMIN👑ID:6580113791",
+      "free_trial_used": 0,
+      "balance_classes": 0,
+      "total_generated": 0,
+      "created_at": "2026-10-30 11:58:15"
+    }
+  ],
   "transactions": [],
   "settings": {
     "archive_channel_id": "-1004488864085"
