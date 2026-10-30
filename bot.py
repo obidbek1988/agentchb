@@ -23,6 +23,7 @@ from excel_service import build_bsb_excel, build_chsb_excel
 from criteria_store import get_criteria_for_grade, format_criteria_preview
 from emaktab_parser import parse_emaktab_file
 from pdf_utils import pdf_to_images
+import db_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -32,7 +33,12 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # In-memory channel storage if updated dynamically
 CURRENT_ARCHIVE_ID = ARCHIVE_CHANNEL_ID
+ADMIN_ID = 6580113791
 ADMIN_USERNAME = "obidbek1888"
+CARD_NUMBER = "5614681211002260"
+CARD_HOLDER = "QOBILOV OBIDJON"
+PRICE_PER_CLASS = 5000
+
 FEEDBACK_NOTE = (
     "\n\n⚠️ _Eslatma: Tizim hozir test rejimida ishlamoqda. Tayyor bo‘lganda hisobotni bir tekshirib qo‘ying (imloviy xatolik bo‘lishi mumkin)._\n"
     "📩 _Xato va takliflar uchun admin Telegrami:_ @obidbek1888"
@@ -47,9 +53,213 @@ def get_main_keyboard():
         [
             KeyboardButton(text="3️⃣ CHSB (Ballar orqali)"),
             KeyboardButton(text="4️⃣ CHSB (Testlarni tekshirish)")
+        ],
+        [
+            KeyboardButton(text="💰 Hisobim / To‘lov qilish"),
+            KeyboardButton(text="ℹ️ Narxlar va Yordam")
         ]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+# ==================== TO'LOV VA BALANS TIZIMI ====================
+@dp.message(F.text.contains("Hisobim / To‘lov qilish"))
+@dp.message(F.text.contains("Hisobim"))
+@dp.message(Command("balance"))
+async def show_balance_menu(message: types.Message):
+    user = db_service.get_or_create_user(message.from_user.id, message.from_user.username, message.from_user.full_name)
+    bal = user.get("balance_classes", 0)
+    free_used = user.get("free_trial_used", 0)
+    is_admin = (message.from_user.id == ADMIN_ID)
+
+    free_status = "❌ Ishlatilgan" if free_used else "🎁 1 ta sinf bepul mavjud!"
+    if is_admin:
+        status_text = "👑 **ADMINSTATUS:** Cheksiz bepul hisobotlar!"
+    else:
+        status_text = (
+            f"👤 **Foydalanuvchi:** {message.from_user.full_name}\n"
+            f"🆔 **ID:** `{message.from_user.id}`\n\n"
+            f"🎁 **Sinov imkoniyati:** {free_status}\n"
+            f"💰 **Mavjud hisobotlar balansi:** **{bal} ta sinf**\n"
+            f"💵 **1 ta sinf hisoboti:** {PRICE_PER_CLASS:,} so‘m\n"
+        )
+
+    msg = (
+        f"{status_text}\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"💳 **To‘lov uchun karta raqami:**\n"
+        f"*(Raqam ustiga bosing — avtomatik nusxalanadi)*\n\n"
+        f"`{CARD_NUMBER}`\n"
+        f"👤 {CARD_HOLDER}\n\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"📲 **Hisobni to‘ldirish tartibi:**\n"
+        f"1. Yuqoridagi kartaga to‘lovni bajaring (masalan: 1 ta sinf uchun 5,000 so‘m yoki 4 ta sinf uchun 20,000 so‘m);\n"
+        f"2. To‘lov **chekining rasmini (skrinshotini)** pastdagi tugma orqali botga yuboring;\n"
+        f"3. Admin 2-5 daqiqa ichida tekshirib tasdiqlaydi va balansingizga sinflar qo‘shiladi!"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 To‘lov chekini yuborish", callback_data="send_receipt_prompt")],
+        [InlineKeyboardButton(text="💬 Adminga bog‘lanish", url=f"https://t.me/{ADMIN_USERNAME}")]
+    ])
+    await message.answer(msg, reply_markup=kb, parse_mode="Markdown")
+
+@dp.message(F.text.contains("Narxlar va Yordam"))
+async def show_help_pricing(message: types.Message):
+    msg = (
+        "ℹ️ **BSB & CHSB Bot — Narxlar va Foydalanish:**\n\n"
+        "🎁 **Bepul sinov:** Har bir o‘qituvchiga dastlabki **1 ta sinf hisoboti mutlaqo bepul** beriladi (A4 format va mezon taqsimotini sinab ko‘rishingiz uchun).\n\n"
+        f"💵 **Xizmat narxi:**\n"
+        f"• 1 ta to‘liq sinf BSB yoki CHSB hisoboti — **{PRICE_PER_CLASS:,} so‘m**\n"
+        f"• 4 ta sinf (oylik paket) — **20,000 so‘m**\n"
+        f"• 10 ta sinf paketi — **50,000 so‘m**\n\n"
+        "💳 **To‘lov kartasi:** (ustiga bossangiz nusxalanadi)\n"
+        f"`{CARD_NUMBER}`\n"
+        f"👤 {CARD_HOLDER}\n\n"
+        f"📩 Savol va takliflar uchun admin: @{ADMIN_USERNAME}"
+    )
+    await message.answer(msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+
+@dp.callback_query(F.data == "send_receipt_prompt")
+async def handle_receipt_prompt(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.waiting_for_receipt)
+    await callback.message.answer(
+        "📸 **To‘lov cheki rasmini (skrinshotini) yuboring:**\n\n"
+        "*(Iltimos, chekda sana, summa va karta raqami ko‘ringan bo‘lsin)*",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@dp.message(BotStates.waiting_for_receipt, F.photo)
+async def handle_receipt_photo(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    username = message.from_user.username or "mavjud_emas"
+    full_name = message.from_user.full_name
+    file_id = message.photo[-1].file_id
+
+    tx_id = db_service.log_transaction(user_id, file_id, amount_classes=1)
+
+    await message.answer(
+        "✅ **To‘lov chekingiz adminga yetkazildi!**\n\n"
+        "⏳ Admin to‘lovni tasdiqlashi bilan sizga xabar keladi va hisobingiz to‘ldiriladi. "
+        "Odatda bu 2–5 daqiqa vaqt oladi.\n\n"
+        "Rahmat!",
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown"
+    )
+    await state.clear()
+
+    # Send receipt to ADMIN for 1-click approval
+    admin_caption = (
+        f"🔔 **Yangi to‘lov cheki keldi! (№{tx_id})**\n\n"
+        f"👤 **O‘qituvchi:** {full_name}\n"
+        f"🔗 **Username:** @{username}\n"
+        f"🆔 **User ID:** `{user_id}`\n\n"
+        f"Iltimos, hisobingizga pul tushganini tekshirib, quyidagi tugmalardan birini bosing:"
+    )
+
+    admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ +1 sinf (5,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_1"),
+            InlineKeyboardButton(text="✅ +2 sinf (10,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_2"),
+        ],
+        [
+            InlineKeyboardButton(text="✅ +4 sinf (20,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_4"),
+            InlineKeyboardButton(text="✅ +10 sinf (50,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_10"),
+        ],
+        [
+            InlineKeyboardButton(text="❌ Rad etish (Soxta chek)", callback_data=f"reject_{tx_id}_{user_id}")
+        ]
+    ])
+
+    try:
+        await bot.send_photo(ADMIN_ID, photo=file_id, caption=admin_caption, reply_markup=admin_kb, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Adminga chek yuborishda xatolik: {e}")
+
+@dp.callback_query(F.data.startswith("approve_"))
+async def handle_admin_approve(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin tasdiqlay oladi!", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    tx_id = int(parts[1])
+    target_user_id = int(parts[2])
+    classes_count = int(parts[3])
+
+    db_service.add_classes_balance(target_user_id, classes_count)
+    db_service.update_transaction_status(tx_id, "approved")
+
+    await callback.message.edit_caption(
+        caption=f"{callback.message.caption}\n\n✅ **TASDIQLANDI:** +{classes_count} ta sinf balansi qo‘shildi!",
+        parse_mode="Markdown"
+    )
+    await callback.answer(f"+{classes_count} sinf muvaffaqiyatli qo‘shildi!", show_alert=True)
+
+    # Notify student / teacher
+    try:
+        await bot.send_message(
+            target_user_id,
+            f"🎉 **To‘lovingiz tasdiqlandi!**\n\n"
+            f"Hisobingizga **+{classes_count} ta sinf hisoboti** muvaffaqiyatli qo‘shildi.\n"
+            f"Endi botdan bemalol BSB va CHSB hisobotlarini tayyorlashingiz mumkin! 🎓",
+            reply_markup=get_main_keyboard(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchiga tasdiq xabari yetmadi: {e}")
+
+@dp.callback_query(F.data.startswith("reject_"))
+async def handle_admin_reject(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin rad eta oladi!", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    tx_id = int(parts[1])
+    target_user_id = int(parts[2])
+
+    db_service.update_transaction_status(tx_id, "rejected")
+
+    await callback.message.edit_caption(
+        caption=f"{callback.message.caption}\n\n❌ **RAD ETILDI!** (Chek tasdiqlanmadi)",
+        parse_mode="Markdown"
+    )
+    await callback.answer("Chek rad etildi!", show_alert=True)
+
+    try:
+        await bot.send_message(
+            target_user_id,
+            f"⚠️ **To‘lov chekingiz tasdiqlanmadi.**\n\n"
+            f"Iltimos, to‘lov summasi to‘g‘riligini tekshiring yoki admin bilan bog‘laning: @{ADMIN_USERNAME}",
+            reply_markup=get_main_keyboard(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchiga rad xabari yetmadi: {e}")
+
+async def check_access_and_notify(message: types.Message) -> (bool, str):
+    """Foydalanuvchi hisobot qila oladimi yoki to'lov kerakmi?"""
+    can_proceed, credit_type = db_service.can_generate_report(message.from_user.id, admin_id=ADMIN_ID)
+    if can_proceed:
+        return True, credit_type
+
+    # Payment required
+    pay_msg = (
+        "🔒 **Hisobingizda mablag‘ yetarli emas!**\n\n"
+        "🎁 Siz 1 ta bepul sinov imkoniyatidan foydalangansiz.\n"
+        f"Keyingi hisobotlarni tayyorlash uchun hisobingizni to‘ldiring:\n\n"
+        f"💵 **1 ta sinf hisoboti:** {PRICE_PER_CLASS:,} so‘m\n"
+        f"💳 **Karta raqami:** (nusxalash uchun ustiga bosing)\n\n"
+        f"`{CARD_NUMBER}`\n"
+        f"👤 {CARD_HOLDER}\n\n"
+        "To‘lovni amalga oshirib, **'💰 Hisobim / To‘lov qilish'** bo‘limi orqali chekni yuboring — hisobingiz darhol to‘ldiriladi!"
+    )
+    await message.answer(pay_msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    return False, credit_type
+
+    waiting_for_receipt = State()
 
 def get_action_keyboard(show_finish: bool = False):
     kb = []
@@ -97,19 +307,203 @@ def get_criteria_preview_keyboard():
     ]
     return InlineKeyboardMarkup(inline_keyboard=inline_kb)
 
-class BotStates(StatesGroup):
-    m1_journal_fixed = State()
-    m1_journal = State()
-    m1_criteria = State()
+# ==================== TO'LOV VA BALANS TIZIMI ====================
+@dp.message(F.text.contains("Hisobim / To‘lov qilish"))
+@dp.message(F.text.contains("Hisobim"))
+@dp.message(Command("balance"))
+async def show_balance_menu(message: types.Message):
+    user = db_service.get_or_create_user(message.from_user.id, message.from_user.username, message.from_user.full_name)
+    bal = user.get("balance_classes", 0)
+    free_used = user.get("free_trial_used", 0)
+    is_admin = (message.from_user.id == ADMIN_ID)
 
-    m2_criteria = State()
-    m2_works = State()
+    free_status = "❌ Ishlatilgan" if free_used else "🎁 1 ta sinf bepul mavjud!"
+    if is_admin:
+        status_text = "👑 **ADMINSTATUS:** Cheksiz bepul hisobotlar!"
+    else:
+        status_text = (
+            f"👤 **Foydalanuvchi:** {message.from_user.full_name}\n"
+            f"🆔 **ID:** `{message.from_user.id}`\n\n"
+            f"🎁 **Sinov imkoniyati:** {free_status}\n"
+            f"💰 **Mavjud hisobotlar balansi:** **{bal} ta sinf**\n"
+            f"💵 **1 ta sinf hisoboti:** {PRICE_PER_CLASS:,} so‘m\n"
+        )
 
-    m3_journal = State()
-    m3_criteria = State()
+    msg = (
+        f"{status_text}\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"💳 **To‘lov uchun karta raqami:**\n"
+        f"*(Raqam ustiga bosing — avtomatik nusxalanadi)*\n\n"
+        f"`{CARD_NUMBER}`\n"
+        f"👤 {CARD_HOLDER}\n\n"
+        f"➖➖➖➖➖➖➖➖➖➖\n"
+        f"📲 **Hisobni to‘ldirish tartibi:**\n"
+        f"1. Yuqoridagi kartaga to‘lovni bajaring (masalan: 1 ta sinf uchun 5,000 so‘m yoki 4 ta sinf uchun 20,000 so‘m);\n"
+        f"2. To‘lov **chekining rasmini (skrinshotini)** pastdagi tugma orqali botga yuboring;\n"
+        f"3. Admin 2-5 daqiqa ichida tekshirib tasdiqlaydi va balansingizga sinflar qo‘shiladi!"
+    )
 
-    m4_keys = State()
-    m4_student_tests = State()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📸 To‘lov chekini yuborish", callback_data="send_receipt_prompt")],
+        [InlineKeyboardButton(text="💬 Adminga bog‘lanish", url=f"https://t.me/{ADMIN_USERNAME}")]
+    ])
+    await message.answer(msg, reply_markup=kb, parse_mode="Markdown")
+
+@dp.message(F.text.contains("Narxlar va Yordam"))
+async def show_help_pricing(message: types.Message):
+    msg = (
+        "ℹ️ **BSB & CHSB Bot — Narxlar va Foydalanish:**\n\n"
+        "🎁 **Bepul sinov:** Har bir o‘qituvchiga dastlabki **1 ta sinf hisoboti mutlaqo bepul** beriladi (A4 format va mezon taqsimotini sinab ko‘rishingiz uchun).\n\n"
+        f"💵 **Xizmat narxi:**\n"
+        f"• 1 ta to‘liq sinf BSB yoki CHSB hisoboti — **{PRICE_PER_CLASS:,} so‘m**\n"
+        f"• 4 ta sinf (oylik paket) — **20,000 so‘m**\n"
+        f"• 10 ta sinf paketi — **50,000 so‘m**\n\n"
+        "💳 **To‘lov kartasi:** (ustiga bossangiz nusxalanadi)\n"
+        f"`{CARD_NUMBER}`\n"
+        f"👤 {CARD_HOLDER}\n\n"
+        f"📩 Savol va takliflar uchun admin: @{ADMIN_USERNAME}"
+    )
+    await message.answer(msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+
+@dp.callback_query(F.data == "send_receipt_prompt")
+async def handle_receipt_prompt(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.waiting_for_receipt)
+    await callback.message.answer(
+        "📸 **To‘lov cheki rasmini (skrinshotini) yuboring:**\n\n"
+        "*(Iltimos, chekda sana, summa va karta raqami ko‘ringan bo‘lsin)*",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+@dp.message(BotStates.waiting_for_receipt, F.photo)
+async def handle_receipt_photo(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    username = message.from_user.username or "mavjud_emas"
+    full_name = message.from_user.full_name
+    file_id = message.photo[-1].file_id
+
+    tx_id = db_service.log_transaction(user_id, file_id, amount_classes=1)
+
+    await message.answer(
+        "✅ **To‘lov chekingiz adminga yetkazildi!**\n\n"
+        "⏳ Admin to‘lovni tasdiqlashi bilan sizga xabar keladi va hisobingiz to‘ldiriladi. "
+        "Odatda bu 2–5 daqiqa vaqt oladi.\n\n"
+        "Rahmat!",
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown"
+    )
+    await state.clear()
+
+    # Send receipt to ADMIN for 1-click approval
+    admin_caption = (
+        f"🔔 **Yangi to‘lov cheki keldi! (№{tx_id})**\n\n"
+        f"👤 **O‘qituvchi:** {full_name}\n"
+        f"🔗 **Username:** @{username}\n"
+        f"🆔 **User ID:** `{user_id}`\n\n"
+        f"Iltimos, hisobingizga pul tushganini tekshirib, quyidagi tugmalardan birini bosing:"
+    )
+
+    admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ +1 sinf (5,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_1"),
+            InlineKeyboardButton(text="✅ +2 sinf (10,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_2"),
+        ],
+        [
+            InlineKeyboardButton(text="✅ +4 sinf (20,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_4"),
+            InlineKeyboardButton(text="✅ +10 sinf (50,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_10"),
+        ],
+        [
+            InlineKeyboardButton(text="❌ Rad etish (Soxta chek)", callback_data=f"reject_{tx_id}_{user_id}")
+        ]
+    ])
+
+    try:
+        await bot.send_photo(ADMIN_ID, photo=file_id, caption=admin_caption, reply_markup=admin_kb, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Adminga chek yuborishda xatolik: {e}")
+
+@dp.callback_query(F.data.startswith("approve_"))
+async def handle_admin_approve(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin tasdiqlay oladi!", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    tx_id = int(parts[1])
+    target_user_id = int(parts[2])
+    classes_count = int(parts[3])
+
+    db_service.add_classes_balance(target_user_id, classes_count)
+    db_service.update_transaction_status(tx_id, "approved")
+
+    await callback.message.edit_caption(
+        caption=f"{callback.message.caption}\n\n✅ **TASDIQLANDI:** +{classes_count} ta sinf balansi qo‘shildi!",
+        parse_mode="Markdown"
+    )
+    await callback.answer(f"+{classes_count} sinf muvaffaqiyatli qo‘shildi!", show_alert=True)
+
+    # Notify student / teacher
+    try:
+        await bot.send_message(
+            target_user_id,
+            f"🎉 **To‘lovingiz tasdiqlandi!**\n\n"
+            f"Hisobingizga **+{classes_count} ta sinf hisoboti** muvaffaqiyatli qo‘shildi.\n"
+            f"Endi botdan bemalol BSB va CHSB hisobotlarini tayyorlashingiz mumkin! 🎓",
+            reply_markup=get_main_keyboard(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchiga tasdiq xabari yetmadi: {e}")
+
+@dp.callback_query(F.data.startswith("reject_"))
+async def handle_admin_reject(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin rad eta oladi!", show_alert=True)
+        return
+
+    parts = callback.data.split("_")
+    tx_id = int(parts[1])
+    target_user_id = int(parts[2])
+
+    db_service.update_transaction_status(tx_id, "rejected")
+
+    await callback.message.edit_caption(
+        caption=f"{callback.message.caption}\n\n❌ **RAD ETILDI!** (Chek tasdiqlanmadi)",
+        parse_mode="Markdown"
+    )
+    await callback.answer("Chek rad etildi!", show_alert=True)
+
+    try:
+        await bot.send_message(
+            target_user_id,
+            f"⚠️ **To‘lov chekingiz tasdiqlanmadi.**\n\n"
+            f"Iltimos, to‘lov summasi to‘g‘riligini tekshiring yoki admin bilan bog‘laning: @{ADMIN_USERNAME}",
+            reply_markup=get_main_keyboard(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Foydalanuvchiga rad xabari yetmadi: {e}")
+
+async def check_access_and_notify(message: types.Message) -> (bool, str):
+    """Foydalanuvchi hisobot qila oladimi yoki to'lov kerakmi?"""
+    can_proceed, credit_type = db_service.can_generate_report(message.from_user.id, admin_id=ADMIN_ID)
+    if can_proceed:
+        return True, credit_type
+
+    # Payment required
+    pay_msg = (
+        "🔒 **Hisobingizda mablag‘ yetarli emas!**\n\n"
+        "🎁 Siz 1 ta bepul sinov imkoniyatidan foydalangansiz.\n"
+        f"Keyingi hisobotlarni tayyorlash uchun hisobingizni to‘ldiring:\n\n"
+        f"💵 **1 ta sinf hisoboti:** {PRICE_PER_CLASS:,} so‘m\n"
+        f"💳 **Karta raqami:** (nusxalash uchun ustiga bosing)\n\n"
+        f"`{CARD_NUMBER}`\n"
+        f"👤 {CARD_HOLDER}\n\n"
+        "To‘lovni amalga oshirib, **'💰 Hisobim / To‘lov qilish'** bo‘limi orqali chekni yuboring — hisobingiz darhol to‘ldiriladi!"
+    )
+    await message.answer(pay_msg, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    return False, credit_type
 
 # Catch channel posts to auto-detect archive channel ID
 @dp.channel_post()
@@ -164,13 +558,19 @@ async def send_to_archive(doc_path: str, caption: str):
             logger.warning(f"Arxiv kanalga jo'natilmadi: {e}")
 
 # ==================== 1-REJIM: BSB BALLAR ORQALI ====================
+@dp.message(F.text.contains("1️⃣ BSB (Ballar orqali)"))
 @dp.message(F.text.contains("BSB (Ballar orqali)"))
 async def mode1_start(message: types.Message, state: FSMContext):
+    can_proceed, credit_type = await check_access_and_notify(message)
+    if not can_proceed:
+        return
+
     await state.clear()
+    await state.update_data(credit_type=credit_type)
     msg = (
         "📝 **1-REJIM: BSB (Ballar orqali hisobot)**\n\n"
         "O‘zbek sinflar Informatika 1-BSB rasmiy mezonlari **bazada tayyor saqlangan!**\n\n"
-        "💡 Sinfni tanlasangiz, mezon rasmini qayta-qayta yuklash shart emas — **faqat elektron jurnal skrinshotini** yuborsangiz kifoya!\n\n"
+        "💡 Sinfni tanlasangiz, mezon rasmini qayta-qayta yuklash shart emas — **faqat elektron jurnal skrinshotini yoki Excel faylini** yuborsangiz kifoya!\n\n"
         "Quyidagilardan birini tanlang yoki mezonni ko‘ring:"
     )
     await message.answer(msg, reply_markup=get_grade_selection_keyboard(), parse_mode="Markdown")
@@ -294,6 +694,8 @@ async def mode1_fixed_document(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf Excel): {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Excel Direct Parse Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Faylni o‘qishda xatolik: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
@@ -351,6 +753,8 @@ async def mode1_fixed_finish(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB ({grade}-sinf): {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Fixed Criteria BSB Error: {e}", exc_info=True)
         err_msg = (
@@ -517,6 +921,8 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 1 Error: {e}", exc_info=True)
         err_msg = (
@@ -530,9 +936,15 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 2-REJIM: BSB ISHLARNI TEKSHIRISH ====================
+@dp.message(F.text.contains("2️⃣ BSB (Ishlarni tekshirish)"))
 @dp.message(F.text.contains("BSB (Ishlarni tekshirish)"))
 async def mode2_start(message: types.Message, state: FSMContext):
+    can_proceed, credit_type = await check_access_and_notify(message)
+    if not can_proceed:
+        return
+
     await state.clear()
+    await state.update_data(credit_type=credit_type)
     await state.set_state(BotStates.m2_criteria)
     await message.answer(
         "✍️ **2-REJIM: BSB o‘quvchilar ishini tekshirish**\n\n"
@@ -649,6 +1061,8 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan BSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 2 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
@@ -656,9 +1070,15 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 3-REJIM: CHSB BALLAR ORQALI ====================
+@dp.message(F.text.contains("3️⃣ CHSB (Ballar orqali)"))
 @dp.message(F.text.contains("CHSB (Ballar orqali)"))
 async def mode3_start(message: types.Message, state: FSMContext):
+    can_proceed, credit_type = await check_access_and_notify(message)
+    if not can_proceed:
+        return
+
     await state.clear()
+    await state.update_data(credit_type=credit_type)
     await state.set_state(BotStates.m3_journal)
     await message.answer(
         "📊 **3-REJIM: CHSB (Ballar orqali hisobot)**\n\n"
@@ -727,6 +1147,8 @@ async def mode3_journal_document(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi CHSB (Excel): {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = (await state.get_data()).get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 3 Excel Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
@@ -780,6 +1202,8 @@ async def mode3_criteria_doc(message: types.Message, state: FSMContext):
             await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
             await send_to_archive(out_excel, f"📁 Yangi CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
             await status_msg.delete()
+            credit_type = data.get("credit_type", "paid")
+            db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
         except Exception as e:
             logger.error(f"Mode 3 Criteria PDF error: {e}", exc_info=True)
             await message.answer(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
@@ -816,6 +1240,8 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Yangi CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 3 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
@@ -823,9 +1249,15 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 4-REJIM: CHSB TESTLARNI TEKSHIRISH ====================
+@dp.message(F.text.contains("4️⃣ CHSB (Testlarni tekshirish)"))
 @dp.message(F.text.contains("CHSB (Testlarni tekshirish)"))
 async def mode4_start(message: types.Message, state: FSMContext):
+    can_proceed, credit_type = await check_access_and_notify(message)
+    if not can_proceed:
+        return
+
     await state.clear()
+    await state.update_data(credit_type=credit_type)
     await state.set_state(BotStates.m4_keys)
     await message.answer(
         "🎯 **4-REJIM: CHSB Testlarni tekshirish va hisobot tuzish**\n\n"
@@ -942,6 +1374,8 @@ async def mode4_finish(message: types.Message, state: FSMContext):
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
         await status_msg.delete()
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 4 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
