@@ -1382,6 +1382,80 @@ async def mode4_finish(message: types.Message, state: FSMContext):
     finally:
         await state.clear()
 
+# ==================== ADMIN UCHUN MAXSUS BUYRUQLAR ====================
+@dp.message(Command("admin"))
+@dp.message(Command("baza"))
+@dp.message(F.text.lower().in_(["/admin", "/baza", "baza"]))
+async def admin_dashboard_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    import sqlite3
+    conn = sqlite3.connect("bot_database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users;")
+    total_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(*) FROM users WHERE free_trial_used = 1;")
+    used_trials = cursor.fetchone()[0]
+
+    cursor.execute("SELECT SUM(total_generated) FROM users;")
+    total_gen = cursor.fetchone()[0] or 0
+
+    cursor.execute("SELECT COUNT(*) FROM transactions WHERE status = 'approved';")
+    approved_tx = cursor.fetchone()[0]
+
+    conn.close()
+
+    admin_msg = (
+        f"📊 **BOTNING BAZA VA MOLIYA STATISTIKASI:**\n\n"
+        f"👥 **Jami o‘qituvchilar:** {total_users} nafar\n"
+        f"🎁 **Sinovdan foydalanganlar:** {used_trials} nafar\n"
+        f"📑 **Jami yaratilgan hisobotlar:** {total_gen} ta\n"
+        f"💰 **Tasdiqlangan to‘lovlar:** {approved_tx} ta\n"
+        f"💵 **Tushum (taxminan):** {approved_tx * 5000:,} so‘m\n\n"
+        f"Pastdagi tugma orqali butun bazani Excel qilib yuklab olishingiz mumkin:"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📥 Baza (Excel)ni yuklab olish", callback_data="export_db_excel")]
+    ])
+    await message.answer(admin_msg, reply_markup=kb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "export_db_excel")
+async def export_db_to_excel(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin uchun!", show_alert=True)
+        return
+
+    import sqlite3, openpyxl
+    conn = sqlite3.connect("bot_database.db")
+    cursor = conn.cursor()
+
+    wb = openpyxl.Workbook()
+    ws_u = wb.active
+    ws_u.title = "Foydalanuvchilar"
+
+    ws_u.append(["Telegram ID", "Username", "F.I.O", "Bepul sinov", "Mavjud balans (sinflar)", "Jami hisobotlar", "Ro‘yxatdan o‘tgan sana"])
+    cursor.execute("SELECT user_id, username, full_name, free_trial_used, balance_classes, total_generated, created_at FROM users;")
+    for row in cursor.fetchall():
+        ws_u.append(list(row))
+
+    ws_t = wb.create_sheet(title="To‘lovlar Tarixi")
+    ws_t.append(["Tranzaksiya ID", "User ID", "Sinflar soni", "Holat", "Sana"])
+    cursor.execute("SELECT id, user_id, amount_classes, status, created_at FROM transactions;")
+    for row in cursor.fetchall():
+        ws_t.append(list(row))
+
+    conn.close()
+
+    export_path = "temp/Bot_Baza_Hisoboti.xlsx"
+    wb.save(export_path)
+
+    doc = FSInputFile(export_path, filename="Bot_Foydalanuvchilar_va_To‘lovlar_Bazasi.xlsx")
+    await callback.message.answer_document(doc, caption="📊 **Barcha hisob-kitoblar va o‘qituvchilar bazasi (Excel shaklida):**", parse_mode="Markdown")
+    await callback.answer()
+
 async def handle_ping(request):
     return web.Response(text="BSB & CHSB Hisobot Agent Telegram Bot is running 24/7!")
 
