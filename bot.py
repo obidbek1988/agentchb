@@ -1504,6 +1504,14 @@ async def export_db_to_excel(callback: CallbackQuery):
 
     try:
         import sqlite3, openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        try:
+            db_service.restore_from_github()
+        except Exception:
+            pass
+
         os.makedirs("temp", exist_ok=True)
         conn = sqlite3.connect("bot_database.db")
         cursor = conn.cursor()
@@ -1512,18 +1520,84 @@ async def export_db_to_excel(callback: CallbackQuery):
         ws_u = wb.active
         ws_u.title = "Foydalanuvchilar"
 
-        ws_u.append(["Telegram ID", "Username", "F.I.O", "Bepul sinov", "Mavjud balans (sinflar)", "Jami hisobotlar", "Ro‘yxatdan o‘tgan sana"])
-        cursor.execute("SELECT user_id, username, full_name, free_trial_used, balance_classes, total_generated, created_at FROM users;")
+        headers_u = [
+            "Telegram ID", "Username", "F.I.O (Ism-Familiya)", 
+            "Bepul sinov", "Mavjud balans (sinf)", "Jami hisobotlar", "Ro‘yxatdan o‘tgan sana"
+        ]
+        ws_u.append(headers_u)
+
+        cursor.execute("SELECT user_id, username, full_name, free_trial_used, balance_classes, total_generated, created_at FROM users ORDER BY created_at DESC;")
         for row in cursor.fetchall():
-            ws_u.append(list(row))
+            uid, uname, fname, trial, bal, total_gen, cdate = row
+            trial_text = "Ishlatilgan (0)" if trial else "Mavjud (1 ta)"
+            ws_u.append([
+                str(uid),
+                f"@{uname}" if uname and not str(uname).startswith("@") else (uname or ""),
+                fname or "",
+                trial_text,
+                f"{bal} ta sinf",
+                total_gen,
+                str(cdate)
+            ])
 
         ws_t = wb.create_sheet(title="To‘lovlar Tarixi")
-        ws_t.append(["Tranzaksiya ID", "User ID", "Sinflar soni", "Holat", "Sana"])
-        cursor.execute("SELECT id, user_id, amount_classes, status, created_at FROM transactions;")
+        headers_t = ["Tranzaksiya ID", "User ID", "Tasdiqlangan sinflar", "Holat", "Sana"]
+        ws_t.append(headers_t)
+        cursor.execute("SELECT id, user_id, amount_classes, status, created_at FROM transactions ORDER BY created_at DESC;")
         for row in cursor.fetchall():
-            ws_t.append(list(row))
+            tid, uid, amt, status, cdate = row
+            status_map = {"approved": "Tasdiqlangan", "rejected": "Rad etilgan", "pending": "Kutilmoqda"}
+            ws_t.append([
+                f"№{tid}",
+                str(uid),
+                f"+{amt} sinf",
+                status_map.get(status, status),
+                str(cdate)
+            ])
 
         conn.close()
+
+        # Rasmiy, toza va professional dizayn (rang-barang emas, jiddiy va o'qishga oson)
+        header_fill = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        zebra_fill = PatternFill(start_color="F9FAFB", end_color="F9FAFB", fill_type="solid")
+        white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+        thin_border = Border(
+            left=Side(style="thin", color="D3D3D3"),
+            right=Side(style="thin", color="D3D3D3"),
+            top=Side(style="thin", color="D3D3D3"),
+            bottom=Side(style="thin", color="D3D3D3")
+        )
+
+        for ws in [ws_u, ws_t]:
+            ws.views.sheetView[0].showGridLines = True
+            ws.row_dimensions[1].height = 28
+            for col_idx in range(1, ws.max_column + 1):
+                cell = ws.cell(row=1, column=col_idx)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            for row_idx in range(2, ws.max_row + 1):
+                ws.row_dimensions[row_idx].height = 22
+                row_fill = zebra_fill if row_idx % 2 == 0 else white_fill
+                for col_idx in range(1, ws.max_column + 1):
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    cell.border = thin_border
+                    cell.fill = row_fill
+                    if col_idx in [1, 4, 5, 6, 7]:
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+                    else:
+                        cell.alignment = Alignment(horizontal="left", vertical="center")
+
+            for col in ws.columns:
+                max_len = 0
+                for cell in col:
+                    val_str = str(cell.value or "")
+                    if len(val_str) > max_len:
+                        max_len = len(val_str)
+                col_letter = get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 5, 16)
 
         export_path = "temp/Bot_Baza_Hisoboti.xlsx"
         wb.save(export_path)
@@ -1533,6 +1607,53 @@ async def export_db_to_excel(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"Export Excel Error: {e}", exc_info=True)
         await callback.message.answer(f"❌ Xatolik yuz berdi: {str(e)}")
+
+@dp.message(Command("addbalance"))
+async def cmd_add_balance(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    parts = message.text.split()
+    if len(parts) >= 3:
+        try:
+            target_uid = int(parts[1])
+            count = int(parts[2])
+            db_service.add_classes_balance(target_uid, count)
+            user = db_service.get_or_create_user(target_uid)
+            await message.answer(f"✅ User `{target_uid}` hisobiga **+{count} sinf** qo‘shildi!\nYangi balansi: **{user.get('balance_classes', 0)} ta sinf**", parse_mode="Markdown")
+        except Exception as err:
+            await message.answer(f"Xatolik: {err}")
+    else:
+        await message.answer("ℹ️ Qo‘llash: `/addbalance <user_id> <sinflar_soni>`\nMasalan: `/addbalance 6580113791 10`", parse_mode="Markdown")
+
+@dp.message(Command("setbalance"))
+async def cmd_set_balance(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    parts = message.text.split()
+    if len(parts) >= 3:
+        try:
+            target_uid = int(parts[1])
+            count = int(parts[2])
+            import sqlite3
+            conn = sqlite3.connect("bot_database.db")
+            c = conn.cursor()
+            c.execute("UPDATE users SET balance_classes = ? WHERE user_id = ?", (count, target_uid))
+            conn.commit()
+            conn.close()
+            db_service.trigger_cloud_sync()
+            await message.answer(f"✅ User `{target_uid}` balansi **{count} ta sinf** qilib belgilandi!", parse_mode="Markdown")
+        except Exception as err:
+            await message.answer(f"Xatolik: {err}")
+    else:
+        await message.answer("ℹ️ Qo‘llash: `/setbalance <user_id> <sinflar_soni>`\nMasalan: `/setbalance 6580113791 10`", parse_mode="Markdown")
+
+@dp.message(Command("reloadbaza"))
+async def cmd_reload_baza(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    db_service.restore_from_github()
+    user = db_service.get_or_create_user(ADMIN_ID)
+    await message.answer(f"✅ Baza GitHub Cloud'dan yangilandi!\nSizning balansingiz: **{user.get('balance_classes', 0)} ta sinf**", parse_mode="Markdown")
 
 async def handle_ping(request):
     return web.Response(text="BSB & CHSB Hisobot Agent Telegram Bot is running 24/7!")
