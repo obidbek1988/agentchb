@@ -289,7 +289,7 @@ Javob FAQAT sof JSON bo'lsin.
         return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
 
     # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
-    async def evaluate_test_answers(self, keys_img_path: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False) -> Dict[str, Any]:
         batch_size = 4
         all_students = []
         final_info = {}
@@ -302,7 +302,7 @@ Javob FAQAT sof JSON bo'lsin.
                 percent = int((current_count / total_tests) * 100)
                 await progress_callback(f"⏳ Testlar tekshirilmoqda: {current_count} / {total_tests} ta o‘quvchi ({percent}%)...")
 
-            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_img_path, batch, start_tr=i+1)
+            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_input, batch, start_tr=i+1, is_text_key=is_text_key)
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
 
@@ -321,11 +321,18 @@ Javob FAQAT sof JSON bo'lsin.
             "students": all_students
         }
 
-    def _call_eval_tests_vision(self, keys_img_path: str, student_test_img_paths: List[str], start_tr: int = 1) -> Dict[str, Any]:
+    def _call_eval_tests_vision(self, keys_input: str, student_test_img_paths: List[str], start_tr: int = 1, is_text_key: bool = False) -> Dict[str, Any]:
+        if is_text_key:
+            key_desc = f"To'g'ri javoblar kaliti:\n{keys_input}"
+            all_imgs = student_test_img_paths
+        else:
+            key_desc = "1-rasm: CHSB test savollarining to'g'ri javoblari kaliti (masalan: 1-A, 2-D, 3-C...) va mezonlari."
+            all_imgs = [keys_input] + student_test_img_paths
+
         prompt = f"""
 Siz test javoblarini tekshiruvchi mutaxassissiz.
-1-rasm: CHSB test savollarining to'g'ri javoblari kaliti (masalan: 1-A, 2-D, 3-C...) va mezonlari.
-Keyingi rasmlar: O'quvchilarning belgilagan test javoblari varaqalari (A, B, C, D).
+{key_desc}
+O'quvchilarning belgilagan test javoblari varaqalari rasmlari taqdim etilgan.
 
 Vazifangiz:
 Har bir o'quvchining belgilagan javoblarini to'g'ri kalit bilan solishtirib tekshiring:
@@ -358,8 +365,25 @@ Quyidagi JSON formatida qaytaring:
 }}
 Javob FAQAT sof JSON bo'lsin.
 """
-        all_imgs = [keys_img_path] + student_test_img_paths
         return self._send_prompt_to_gemini(prompt, all_imgs)
+
+    def _extract_json(self, text: str) -> Dict[str, Any]:
+        text = text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        try:
+            return json.loads(text)
+        except Exception:
+            s = text.find("{")
+            e = text.rfind("}")
+            if s != -1 and e != -1:
+                return json.loads(text[s:e+1])
+            raise
 
     def _send_prompt_to_gemini(self, prompt: str, img_paths: List[str]) -> Dict[str, Any]:
         retries = 3
@@ -367,28 +391,21 @@ Javob FAQAT sof JSON bo'lsin.
 
         for attempt in range(retries):
             key = self._get_next_key()
-            genai.configure(api_key=key)
+            genai.configure(api_key=key, transport="rest")
             model = genai.GenerativeModel("gemini-3.8-flash")
 
-            loaded_imgs = [Image.open(p) for p in img_paths]
+            loaded_imgs = [Image.open(p) for p in img_paths if p and os.path.exists(p)]
             content = [prompt] + loaded_imgs
 
             try:
                 response = model.generate_content(content)
                 txt = response.text.strip()
-                if txt.startswith("```json"):
-                    txt = txt[7:]
-                if txt.startswith("```"):
-                    txt = txt[3:]
-                if txt.endswith("```"):
-                    txt = txt[:-3]
-
-                return json.loads(txt.strip())
+                return self._extract_json(txt)
             except Exception as e:
                 logger.warning(f"Attempt {attempt+1} failed with key ...{key[-4:]}: {e}")
                 last_error = e
                 import time
-                time.sleep(3.5)
+                time.sleep(2.0)
 
         raise RuntimeError(f"Gemini so'rovi bajarilmadi: {last_error}")
 

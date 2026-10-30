@@ -1384,18 +1384,35 @@ async def mode4_keys_doc(message: types.Message, state: FSMContext):
     else:
         await message.answer("Iltimos, test kalitini rasm yoki PDF formatida yuboring.")
 
+@dp.message(BotStates.m4_keys, F.text)
+async def mode4_keys_text(message: types.Message, state: FSMContext):
+    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(keys_text=message.text.strip(), keys_path="", test_paths=[])
+    await state.set_state(BotStates.m4_student_tests)
+    await message.answer(
+        "✅ **To‘g‘ri javoblar kaliti matn sifatida qabul qilindi!**\n\n"
+        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF faylini** yuboring (bir nechta bo‘lsa ketma-ket yuboravering).\n\n"
+        "Barcha rasmlarni yuborib bo‘lgach, hisobotni boshlash uchun pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+        reply_markup=get_action_keyboard(show_finish=True),
+        parse_mode="Markdown"
+    )
+
 @dp.message(BotStates.m4_keys, F.photo)
 async def mode4_keys(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     kpath = f"temp/m4_k_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=kpath)
-    await state.update_data(keys_path=kpath, test_paths=[])
+    await state.update_data(keys_path=kpath, keys_text="", test_paths=[])
 
     await state.set_state(BotStates.m4_student_tests)
     await message.answer(
-        "✅ Test kaliti qabul qilindi!\n\n"
+        "✅ **Test kaliti qabul qilindi!**\n\n"
         "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF fayllarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
-        "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
+        "Barchasini yuborib bo‘lgach, hisobotni olish uchun pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
         reply_markup=get_action_keyboard(show_finish=True),
         parse_mode="Markdown"
     )
@@ -1434,19 +1451,29 @@ async def mode4_photo(message: types.Message, state: FSMContext):
     tlist.append(tpath)
     await state.update_data(test_paths=tlist)
 
-    await message.answer(f"📥 {len(tlist)}-o‘quvchi test varaqasi qabul qilindi. Yana yuboring yoki 'Tayyorlang' tugmasini bosing.", reply_markup=get_action_keyboard(show_finish=True))
+    await message.answer(
+        f"📥 **{len(tlist)}-o‘quvchi test varaqasi qabul qilindi!**\n\n"
+        f"• Yana o‘quvchilar bo‘lsa, rasmlarini yuboravering;\n"
+        f"• Agar rasmlar tugagan bo‘lsa, hisobotni olish uchun pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing!",
+        reply_markup=get_action_keyboard(show_finish=True),
+        parse_mode="Markdown"
+    )
 
 @dp.message(BotStates.m4_student_tests, F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
 async def mode4_finish(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    kpath = data.get("keys_path")
+    kpath = data.get("keys_path", "")
+    ktext = data.get("keys_text", "")
     tlist = data.get("test_paths", [])
 
     if not tlist:
         await message.answer("Iltimos, avval kamida bitta o‘quvchi test javobi rasmini yuboring.")
         return
 
-    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(tlist)} nafar o‘quvchining testlari 5 tadan bo‘lib xavfsiz tekshirilmoqda...")
+    is_text = bool(ktext)
+    keys_input = ktext if is_text else kpath
+
+    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**\n\nAI {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti bilan solishtirmoqda (taxminan 15–25 soniya)...")
 
     async def update_progress(text):
         try:
@@ -1472,9 +1499,10 @@ async def mode4_finish(message: types.Message, state: FSMContext):
 
     try:
         parsed = await ai_service.evaluate_test_answers(
-            kpath, tlist,
+            keys_input, tlist,
             progress_callback=update_progress,
-            batch_callback=send_batch_test_results
+            batch_callback=send_batch_test_results,
+            is_text_key=is_text
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_chsb_test_report.xlsx"
