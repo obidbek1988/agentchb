@@ -1059,11 +1059,15 @@ async def mode2_criteria(message: types.Message, state: FSMContext):
     await state.update_data(criteria_path=cpath, works_paths=[])
 
     await state.set_state(BotStates.m2_works)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m2_single_image_process")]
+    ])
     await message.answer(
-        "✅ Mezon qabul qilindi!\n\n"
-        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini yoki PDF fayllarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
-        "Barcha rasmlarni yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-        reply_markup=get_action_keyboard(show_finish=True),
+        "✅ **BSB mezoni qabul qilindi!**\n\n"
+        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
+        "• Agar siz faqat shu 1 dona rasmni tekshirmoqchi bo‘lsangiz, pastdagi **'⚡ Faqat shu 1 ta rasmni tekshirish'** tugmasini bosing;\n"
+        "• O‘quvchi ishlarini yuborgach, **'🚀 Hisobotni tayyorlash'** tugmasi orqali hisobotni oling!",
+        reply_markup=ikb,
         parse_mode="Markdown"
     )
 
@@ -1101,10 +1105,37 @@ async def mode2_photo(message: types.Message, state: FSMContext):
     wlist.append(wpath)
     await state.update_data(works_paths=wlist)
 
-    await message.answer(f"📥 {len(wlist)}-o‘quvchi ishi qabul qilindi. Yana yuboring yoki 'Tayyorlang' tugmasini bosing.", reply_markup=get_action_keyboard(show_finish=True))
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(wlist)} ta ish)", callback_data="m2_finish_now")]
+    ])
+    await message.answer(
+        f"📥 **{len(wlist)}-o‘quvchi ishi qabul qilindi.**\n\n"
+        f"• Yana ishlar bo‘lsa, rasmlarini yuboravering;\n"
+        f"• BSB hisobotini chiqarish uchun pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing!",
+        reply_markup=ikb,
+        parse_mode="Markdown"
+    )
 
+@dp.callback_query(F.data == "m2_single_image_process")
+async def cb_m2_single(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    cpath = data.get("criteria_path", "")
+    if cpath:
+        await state.update_data(works_paths=[cpath])
+    await callback.answer("⏳ BSB tekshirish boshlanmoqda...")
+    await mode2_finish(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
+
+@dp.callback_query(F.data == "m2_finish_now")
+async def cb_m2_finish(callback: CallbackQuery, state: FSMContext):
+    await callback.answer("⏳ BSB hisoboti tayyorlanmoqda...")
+    await mode2_finish(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
+
+@dp.message(BotStates.m2_works, F.text.lower().in_(["tayyor", "tayyorla", "tayyorlang", "boshla", "boshlang", "tekshir", "tekshiring", "bo'ldi", "boldi", "hisobot", "qil", "ha", "ok", "1"]))
 @dp.message(BotStates.m2_works, F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
-async def mode2_finish(message: types.Message, state: FSMContext):
+async def mode2_finish(message: types.Message, state: FSMContext, user_id: int = None, username: str = None):
+    actual_user_id = user_id or (message.from_user.id if message.from_user else 0)
+    actual_username = username or (message.from_user.username if message.from_user and message.from_user.username else str(actual_user_id))
+
     data = await state.get_data()
     cpath = data.get("criteria_path")
     wlist = data.get("works_paths", [])
@@ -1113,7 +1144,7 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         await message.answer("Iltimos, avval kamida bitta o‘quvchi ishi rasmini yuboring.")
         return
 
-    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(wlist)} nafar o‘quvchining ishi 5 tadan bo‘lib xavfsiz tekshirilmoqda...")
+    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(wlist)} nafar o‘quvchining ishi 4 tadan bo‘lib tekshirilmoqda...")
 
     async def update_progress(text):
         try:
@@ -1144,16 +1175,16 @@ async def mode2_finish(message: types.Message, state: FSMContext):
             batch_callback=send_batch_works_results
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
-        out_excel = f"temp/{message.from_user.id}_{cname}_bsb_evaluated.xlsx"
+        out_excel = f"temp/{actual_user_id}_{cname}_bsb_evaluated.xlsx"
         build_bsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_BSB_tekshirilgan_hisobot.xlsx")
         cap = f"🎉 **{cname} sinf o‘quvchilarining yozma ishlari to‘liq tekshirildi va BSB hisoboti tuzildi!**{FEEDBACK_NOTE}"
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
-        await send_to_archive(out_excel, f"📁 Tekshirilgan BSB: {cname} | @{message.from_user.username or message.from_user.id}")
+        await send_to_archive(out_excel, f"📁 Tekshirilgan BSB: {cname} | @{actual_username}")
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
-        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
+        db_service.consume_credit(actual_user_id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 2 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
@@ -1409,11 +1440,15 @@ async def mode4_keys(message: types.Message, state: FSMContext):
     await state.update_data(keys_path=kpath, keys_text="", test_paths=[])
 
     await state.set_state(BotStates.m4_student_tests)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m4_single_image_process")]
+    ])
     await message.answer(
         "✅ **Test kaliti qabul qilindi!**\n\n"
-        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF fayllarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
-        "Barchasini yuborib bo‘lgach, hisobotni olish uchun pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-        reply_markup=get_action_keyboard(show_finish=True),
+        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
+        "• Agar siz faqat shu 1 dona rasmni tekshirmoqchi bo‘lsangiz, pastdagi **'⚡ Faqat shu 1 ta rasmni tekshirish'** tugmasini bosing;\n"
+        "• O‘quvchi rasmini yuborgach, **'Hisobotni tayyorlang'** tugmasi orqali natijani oling!",
+        reply_markup=ikb,
         parse_mode="Markdown"
     )
 
@@ -1451,16 +1486,37 @@ async def mode4_photo(message: types.Message, state: FSMContext):
     tlist.append(tpath)
     await state.update_data(test_paths=tlist)
 
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(tlist)} ta o‘quvchi)", callback_data="m4_finish_now")]
+    ])
     await message.answer(
         f"📥 **{len(tlist)}-o‘quvchi test varaqasi qabul qilindi!**\n\n"
         f"• Yana o‘quvchilar bo‘lsa, rasmlarini yuboravering;\n"
-        f"• Agar rasmlar tugagan bo‘lsa, hisobotni olish uchun pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing!",
-        reply_markup=get_action_keyboard(show_finish=True),
+        f"• Hisobotni chiqarish uchun pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing!",
+        reply_markup=ikb,
         parse_mode="Markdown"
     )
 
+@dp.callback_query(F.data == "m4_single_image_process")
+async def cb_m4_single(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    kpath = data.get("keys_path", "")
+    if kpath:
+        await state.update_data(test_paths=[kpath])
+    await callback.answer("⏳ Tekshirish boshlanmoqda...")
+    await mode4_finish(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
+
+@dp.callback_query(F.data == "m4_finish_now")
+async def cb_m4_finish(callback: CallbackQuery, state: FSMContext):
+    await callback.answer("⏳ Hisobot tayyorlanmoqda...")
+    await mode4_finish(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
+
+@dp.message(BotStates.m4_student_tests, F.text.lower().in_(["tayyor", "tayyorla", "tayyorlang", "boshla", "boshlang", "tekshir", "tekshiring", "bo'ldi", "boldi", "hisobot", "qil", "ha", "ok", "1"]))
 @dp.message(BotStates.m4_student_tests, F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
-async def mode4_finish(message: types.Message, state: FSMContext):
+async def mode4_finish(message: types.Message, state: FSMContext, user_id: int = None, username: str = None):
+    actual_user_id = user_id or (message.from_user.id if message.from_user else 0)
+    actual_username = username or (message.from_user.username if message.from_user and message.from_user.username else str(actual_user_id))
+
     data = await state.get_data()
     kpath = data.get("keys_path", "")
     ktext = data.get("keys_text", "")
@@ -1505,16 +1561,16 @@ async def mode4_finish(message: types.Message, state: FSMContext):
             is_text_key=is_text
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
-        out_excel = f"temp/{message.from_user.id}_{cname}_chsb_test_report.xlsx"
+        out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_report.xlsx"
         build_chsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_test_tekshirilgan.xlsx")
         cap = f"🎉 **{cname} sinf testlari to‘liq tekshirildi va CHSB hisoboti tayyorlandi!**{FEEDBACK_NOTE}"
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
-        await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
+        await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{actual_username}")
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
-        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
+        db_service.consume_credit(actual_user_id, credit_type, admin_id=ADMIN_ID)
     except Exception as e:
         logger.error(f"Mode 4 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")

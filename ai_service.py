@@ -392,7 +392,7 @@ Javob FAQAT sof JSON bo'lsin.
         for attempt in range(retries):
             key = self._get_next_key()
             genai.configure(api_key=key, transport="rest")
-            model = genai.GenerativeModel("gemini-3.8-flash")
+            model = genai.GenerativeModel("gemini-3.5-flash")
 
             loaded_imgs = [Image.open(p) for p in img_paths if p and os.path.exists(p)]
             content = [prompt] + loaded_imgs
