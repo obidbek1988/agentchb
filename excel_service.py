@@ -51,7 +51,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
         f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {bsb_number}-BSB ({max_score}ball)natijalari"
     )
 
-    ws.merge_cells("A1:I1")
+    ws.merge_cells("A1:J1")
     c_a1 = ws["A1"]
     c_a1.value = title_text
     c_a1.font = font_title
@@ -70,8 +70,9 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
 
     ws.cell(row=2, column=8, value=f"Jami ball\n{max_score}").font = font_header
     ws.cell(row=2, column=9, value="Foizi\n100%").font = font_header
+    ws.cell(row=2, column=10, value="Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)").font = font_header
 
-    for col in [1, 2, 8, 9]:
+    for col in [1, 2, 8, 9, 10]:
         cell = ws.cell(row=2, column=col)
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
@@ -133,6 +134,11 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
         c_i.border = thin_border
         c_i.font = font_data
 
+        c_j = ws.cell(row=curr_row, column=10, value=st.get("note", ""))
+        c_j.alignment = Alignment(horizontal="left", vertical="center")
+        c_j.border = thin_border
+        c_j.font = font_data
+
         ws.row_dimensions[curr_row].height = 19
 
     end_row = start_row + len(students) - 1
@@ -149,6 +155,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.column_dimensions["G"].width = 13
     ws.column_dimensions["H"].width = 9.5
     ws.column_dimensions["I"].width = 8
+    ws.column_dimensions["J"].width = 26
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
@@ -189,7 +196,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {chsb_number}-CHSB ({max_score}ball)natijalari"
     )
 
-    ws.merge_cells("A1:G1")
+    ws.merge_cells("A1:H1")
     c_a1 = ws["A1"]
     c_a1.value = title_text
     c_a1.font = font_title
@@ -204,7 +211,8 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         ("D2", "(Q) – Qo‘llash,\nhar bir to‘g‘ri javob uchun – 2,4 balldan,\njami 24 ball;"),
         ("E2", "(M) – Mulohaza,\nhar bir to‘g‘ri javob uchun – 5 balldan,\njami 10 ball;"),
         ("F2", f"Jami ball\n{max_score}"),
-        ("G2", "Foizi\n100%")
+        ("G2", "Foizi\n100%"),
+        ("H2", "Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)")
     ]
 
     for coord, txt in chsb_headers:
@@ -259,6 +267,11 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         c_g.border = thin_border
         c_g.font = font_data
 
+        c_h = ws.cell(row=curr_row, column=8, value=st.get("note", ""))
+        c_h.alignment = Alignment(horizontal="left", vertical="center")
+        c_h.border = thin_border
+        c_h.font = font_data
+
         ws.row_dimensions[curr_row].height = 19
 
     end_row = start_row + len(students) - 1
@@ -273,6 +286,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.column_dimensions["E"].width = 20
     ws.column_dimensions["F"].width = 11
     ws.column_dimensions["G"].width = 9
+    ws.column_dimensions["H"].width = 28
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)

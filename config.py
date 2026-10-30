@@ -16,4 +16,4 @@ GEMINI_KEYS = parsed_keys
 
 ADMIN_ID = os.getenv("ADMIN_ID", "")
 ARCHIVE_CHANNEL_ID = os.getenv("ARCHIVE_CHANNEL_ID", "")
-REQUEST_DELAY_SECONDS = float(os.getenv("REQUEST_DELAY_SECONDS", "3.0"))
+REQUEST_DELAY_SECONDS = float(os.getenv("REQUEST_DELAY_SECONDS", "15.0"))

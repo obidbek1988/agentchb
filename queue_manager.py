@@ -3,10 +3,12 @@ import time
 import logging
 from typing import Callable, Any, Tuple
 
+from config import REQUEST_DELAY_SECONDS
+
 logger = logging.getLogger(__name__)
 
 class SmartQueueManager:
-    def __init__(self, delay_seconds: float = 3.0):
+    def __init__(self, delay_seconds: float = REQUEST_DELAY_SECONDS):
         self.delay = delay_seconds
         self.last_call_time = 0.0
         self.active_requests = 0
@@ -35,4 +37,4 @@ class SmartQueueManager:
         finally:
             self.active_requests = max(0, self.active_requests - 1)
 
-queue_manager = SmartQueueManager(delay_seconds=3.0)
+queue_manager = SmartQueueManager(delay_seconds=REQUEST_DELAY_SECONDS)

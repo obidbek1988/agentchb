@@ -163,7 +163,7 @@ Javob FAQAT sof JSON bo'lsin.
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-        batch_size = 5
+        batch_size = 4
         all_students = []
         final_info = {}
         criteria_list = []
@@ -201,7 +201,8 @@ Keyingi rasmlar: O'quvchilarning daftardagi yoki qog'ozdagi yozma ishlari.
 Har bir o'quvchining ishini mezonga qarab tekshiring:
 - O'quvchining ism-familiyasini aniqlang;
 - Har bir topshiriq uchun to'g'riligiga qarab ball bering;
-- Jami to'plagan ballini hisoblang.
+- Jami to'plagan ballini hisoblang;
+- Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: qaysi topshiriq to'g'ri, qaysi birida xato qilgani (masalan: "1-3 topshiriq to'liq, 4-topshiriqda xatolik (-2b)");
 - Tartib raqamini (tr) {start_tr} dan boshlab bering.
 
 Quyidagi JSON formatida qaytaring:
@@ -227,7 +228,8 @@ Quyidagi JSON formatida qaytaring:
       "tr": {start_tr},
       "name": "O'quvchi F.I.O",
       "total_score": 42,
-      "task_scores": [10, 8, 9, 8, 7]
+      "task_scores": [10, 8, 9, 8, 7],
+      "note": "1-3 to'liq, 4-topshiriqda xatolik (-2b)"
     }}
   ]
 }}
@@ -279,9 +281,9 @@ Javob FAQAT sof JSON bo'lsin.
 """
         return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
 
-    # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
+    # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
     async def evaluate_test_answers(self, keys_img_path: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
-        batch_size = 5
+        batch_size = 4
         all_students = []
         final_info = {}
 
@@ -316,6 +318,7 @@ Har bir o'quvchining belgilagan javoblarini to'g'ri kalit bilan solishtirib teks
 - O'quvchi F.I.O;
 - To'g'ri topilgan testlar ballarini hisoblang: (B) Bilish, (Q) Qo'llash, (M) Mulohaza mezonlari bo'yicha ajrating;
 - Jami to'plagan ballini hisoblang (maksimal 40 ball);
+- Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: nechta to'g'ri, nechta xato va qaysi savollarda adashgani (masalan: "12 to'g'ri, 3 xato (4, 9, 14-testlar)");
 - Tartib raqami (tr) {start_tr} dan boshlansin.
 
 Quyidagi JSON formatida qaytaring:
@@ -334,7 +337,8 @@ Quyidagi JSON formatida qaytaring:
       "tr": {start_tr},
       "name": "O'quvchi F.I.O",
       "total_score": 34,
-      "task_scores": [6, 20, 8]
+      "task_scores": [6, 20, 8],
+      "note": "12 to'g'ri, 3 xato (4, 9, 14-testlar)"
     }}
   ]
 }}
