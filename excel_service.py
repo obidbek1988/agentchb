@@ -177,8 +177,8 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
 
     class_name = school_info.get("class_name", "")
     subject = school_info.get("subject", "Informatika")
-    quarter = school_info.get("quarter", 2)
-    chsb_number = school_info.get("chsb_number", 2)
+    quarter = school_info.get("quarter", 1)
+    chsb_number = school_info.get("chsb_number", 1)
     max_score = school_info.get("max_score", 40)
     teacher_name = school_info.get("teacher_name", "Qobilov Obidjon")
     head_teacher = school_info.get("head_teacher", "Mahmudova Dilfuzaxon")

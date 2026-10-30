@@ -82,14 +82,14 @@ def distribute_chsb_40(total_score: Optional[int]) -> List[Optional[float]]:
         
     return [b, q, m]
 
-def parse_emaktab_file(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def parse_emaktab_file(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None, target_mode: str = "BSB") -> Dict[str, Any]:
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".xls":
-        return _parse_xls(file_path, criteria)
+        return _parse_xls(file_path, criteria, target_mode=target_mode)
     else:
-        return _parse_xlsx(file_path, criteria)
+        return _parse_xlsx(file_path, criteria, target_mode=target_mode)
 
-def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None, target_mode: str = "BSB") -> Dict[str, Any]:
     book = xlrd.open_workbook(file_path)
     sheet = book.sheet_by_index(0)
 
@@ -112,18 +112,39 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
             elif t_raw:
                 teacher_name = t_raw.split(",")[0].strip()
 
-    # Find ALL BSB columns (there may be multiple, e.g. group 1, group 2 or 1-BSB / 2-BSB)
+    # Find columns for BSB vs CHSB
+    mode_target = target_mode.upper()
     bsb_cols = []
-    max_score = 50
+    max_score = 40 if mode_target == "CHSB" else 50
+
     for c in range(sheet.ncols):
         col_cells = [str(sheet.cell_value(r, c)) for r in range(min(25, sheet.nrows))]
         joined = " ".join(col_cells).upper()
-        if any(k in joined for k in ["BSB", "БСБ", "CHSB", "ЧСБ", "СУММАТИВ", "SUMMATIV"]):
-            bsb_cols.append(c)
-            for cell_val in col_cells:
-                m_score = re.search(r'\b(25|30|40|50)\b', cell_val)
-                if m_score:
-                    max_score = int(m_score.group(1))
+        
+        if mode_target == "CHSB":
+            # Target CHSB column specifically
+            if any(k in joined for k in ["CHSB", "ЧСБ"]):
+                bsb_cols.append(c)
+                for cell_val in col_cells:
+                    m_score = re.search(r'\b(40)\b', cell_val)
+                    if m_score:
+                        max_score = int(m_score.group(1))
+        else:
+            # Target BSB column specifically (exclude pure CHSB columns if BSB exists)
+            if any(k in joined for k in ["BSB", "БСБ", "СУММАТИВ", "SUMMATIV"]):
+                bsb_cols.append(c)
+                for cell_val in col_cells:
+                    m_score = re.search(r'\b(25|30|50)\b', cell_val)
+                    if m_score:
+                        max_score = int(m_score.group(1))
+
+    # If no specific target found, fallback to any summative
+    if not bsb_cols:
+        for c in range(sheet.ncols):
+            col_cells = [str(sheet.cell_value(r, c)) for r in range(min(25, sheet.nrows))]
+            joined = " ".join(col_cells).upper()
+            if any(k in joined for k in ["BSB", "БСБ", "CHSB", "ЧСБ", "СУММАТИВ"]):
+                bsb_cols.append(c)
 
     # If criteria is provided, criteria overrides max_score
     if criteria:
@@ -190,7 +211,7 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) 
         "students": students
     }
 
-def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None, target_mode: str = "BSB") -> Dict[str, Any]:
     wb = openpyxl.load_workbook(file_path, data_only=True)
     sheet = wb.active
 
@@ -213,18 +234,35 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None)
             elif t_raw:
                 teacher_name = t_raw.split(",")[0].strip()
 
-    # Find ALL BSB columns
+    # Find columns for BSB vs CHSB
+    mode_target = target_mode.upper()
     bsb_cols = []
-    max_score = 50
+    max_score = 40 if mode_target == "CHSB" else 50
+
     for c in range(1, sheet.max_column + 1):
         col_cells = [str(sheet.cell(r, c).value or "") for r in range(1, min(25, sheet.max_row + 1))]
         joined = " ".join(col_cells).upper()
-        if any(k in joined for k in ["BSB", "БСБ", "CHSB", "ЧСБ", "СУММАТИВ", "SUMMATIV"]):
-            bsb_cols.append(c)
-            for cell_val in col_cells:
-                m_score = re.search(r'\b(25|30|40|50)\b', cell_val)
-                if m_score:
-                    max_score = int(m_score.group(1))
+        if mode_target == "CHSB":
+            if any(k in joined for k in ["CHSB", "ЧСБ"]):
+                bsb_cols.append(c)
+                for cell_val in col_cells:
+                    m_score = re.search(r'\b(40)\b', cell_val)
+                    if m_score:
+                        max_score = int(m_score.group(1))
+        else:
+            if any(k in joined for k in ["BSB", "БСБ", "СУММАТИВ", "SUMMATIV"]):
+                bsb_cols.append(c)
+                for cell_val in col_cells:
+                    m_score = re.search(r'\b(25|30|50)\b', cell_val)
+                    if m_score:
+                        max_score = int(m_score.group(1))
+
+    if not bsb_cols:
+        for c in range(1, sheet.max_column + 1):
+            col_cells = [str(sheet.cell(r, c).value or "") for r in range(1, min(25, sheet.max_row + 1))]
+            joined = " ".join(col_cells).upper()
+            if any(k in joined for k in ["BSB", "БСБ", "CHSB", "ЧСБ", "СУММАТИВ"]):
+                bsb_cols.append(c)
 
     if criteria:
         max_score = sum(c.get("max_point", 10) for c in criteria)

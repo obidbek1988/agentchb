@@ -277,7 +277,7 @@ async def mode1_fixed_document(message: types.Message, state: FSMContext):
     await bot.download(message.document, destination=fpath)
 
     try:
-        parsed = parse_emaktab_file(fpath, criteria=crit_info["criteria"])
+        parsed = parse_emaktab_file(fpath, criteria=crit_info["criteria"], target_mode="BSB")
         cname = parsed.get("school_info", {}).get("class_name") or f"{grade}-sinf"
         out_excel = f"temp/{message.from_user.id}_{cname}_bsb.xlsx"
         build_bsb_excel(parsed, out_excel)
@@ -707,7 +707,7 @@ async def mode3_journal_document(message: types.Message, state: FSMContext):
 
     try:
         from emaktab_parser import distribute_chsb_40
-        parsed = parse_emaktab_file(fpath)
+        parsed = parse_emaktab_file(fpath, target_mode="CHSB")
         # Update students task_scores with CHSB B, Q, M (6, 24, 10)
         for st in parsed.get("students", []):
             st["task_scores"] = distribute_chsb_40(st.get("total_score"))
