@@ -8,7 +8,7 @@ from config import REQUEST_DELAY_SECONDS
 logger = logging.getLogger(__name__)
 
 class SmartQueueManager:
-    def __init__(self, delay_seconds: float = REQUEST_DELAY_SECONDS):
+    def __init__(self, delay_seconds: float = 2.0):
         self.delay = delay_seconds
         self.last_call_time = 0.0
         self.active_requests = 0

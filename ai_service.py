@@ -12,6 +12,21 @@ from queue_manager import queue_manager
 logger = logging.getLogger(__name__)
 
 class AIService:
+    def _optimize_image(self, path: str) -> Optional[Image.Image]:
+        if not path or not os.path.exists(path):
+            return None
+        try:
+            img = Image.open(path)
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            max_dim = 1600
+            if max(img.size) > max_dim:
+                img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+            return img
+        except Exception as e:
+            logger.warning(f"Error optimizing image {path}: {e}")
+            return Image.open(path)
+
     def __init__(self):
         self.keys = GEMINI_KEYS
         self.current_key_idx = 0
@@ -164,7 +179,7 @@ Javob FAQAT sof JSON bo'lsin.
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False) -> Dict[str, Any]:
-        batch_size = 4
+        batch_size = 8
         all_students = []
         final_info = {}
         criteria_list = []
@@ -192,7 +207,7 @@ Javob FAQAT sof JSON bo'lsin.
                     logger.warning(f"Batch callback error: {be}")
 
             # Safe interval between batches
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
 
         return {
             "school_info": final_info,
@@ -311,7 +326,7 @@ Javob FAQAT sof JSON bo'lsin.
 
     # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
     async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False) -> Dict[str, Any]:
-        batch_size = 4
+        batch_size = 10
         all_students = []
         final_info = {}
 
@@ -335,7 +350,7 @@ Javob FAQAT sof JSON bo'lsin.
                 except Exception as be:
                     logger.warning(f"Batch test callback error: {be}")
 
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(0.5)
 
         return {
             "school_info": final_info,
@@ -434,7 +449,8 @@ Javob FAQAT sof JSON bo'lsin.
             genai.configure(api_key=key, transport="rest")
             model = genai.GenerativeModel("gemini-3.5-flash")
 
-            loaded_imgs = [Image.open(p) for p in img_paths if p and os.path.exists(p)]
+            loaded_imgs = [self._optimize_image(p) for p in img_paths if p and os.path.exists(p)]
+            loaded_imgs = [im for im in loaded_imgs if im is not None]
             content = [prompt] + loaded_imgs
 
             try:
