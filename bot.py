@@ -32,16 +32,16 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # In-memory channel storage if updated dynamically
-CURRENT_ARCHIVE_ID = ARCHIVE_CHANNEL_ID
+CURRENT_ARCHIVE_ID = db_service.get_setting("archive_channel_id", "") or ARCHIVE_CHANNEL_ID
 ADMIN_ID = 6580113791
-ADMIN_USERNAME = "obidbek1888"
+ADMIN_USERNAME = "Obidbek1988"
 CARD_NUMBER = "5614681211002260"
 CARD_HOLDER = "QOBILOV OBIDJON"
 PRICE_PER_CLASS = 5000
 
 FEEDBACK_NOTE = (
     "\n\n⚠️ _Eslatma: Tizim hozir test rejimida ishlamoqda. Tayyor bo‘lganda hisobotni bir tekshirib qo‘ying (imloviy xatolik bo‘lishi mumkin)._\n"
-    "📩 _Xato va takliflar uchun admin Telegrami:_ @obidbek1888"
+    "📩 _Xato va takliflar uchun admin Telegrami:_ @Obidbek1988"
 )
 
 def get_main_keyboard(is_admin: bool = False):
@@ -90,16 +90,18 @@ async def show_balance_menu(message: types.Message):
     is_admin = (message.from_user.id == ADMIN_ID)
 
     free_status = "❌ Ishlatilgan" if free_used else "🎁 1 ta sinf bepul mavjud!"
-    if is_admin:
-        status_text = "👑 **ADMINSTATUS:** Cheksiz bepul hisobotlar!"
-    else:
-        status_text = (
-            f"👤 **Foydalanuvchi:** {message.from_user.full_name}\n"
-            f"🆔 **ID:** `{message.from_user.id}`\n\n"
-            f"🎁 **Sinov imkoniyati:** {free_status}\n"
-            f"💰 **Mavjud hisobotlar balansi:** **{bal} ta sinf**\n"
-            f"💵 **1 ta sinf hisoboti:** {PRICE_PER_CLASS:,} so‘m\n"
-        )
+    admin_header = "👑 **ADMINSTATUS:** (Siz bot adminisiz — cheksiz huquqqa egasiz)\n\n" if is_admin else ""
+
+    status_text = (
+        f"{admin_header}"
+        f"👤 **Foydalanuvchi:** {message.from_user.full_name}\n"
+        f"🆔 **ID:** `{message.from_user.id}`\n\n"
+        f"🎁 **Sinov imkoniyati:** {free_status}\n"
+        f"💰 **Mavjud hisobotlar balansi:** **{bal} ta sinf**\n"
+        f"💵 **1 ta sinf hisoboti:** 5,000 so‘m\n"
+        f"📦 **4 ta sinf (oylik paket):** 15,000 so‘m\n"
+        f"📦 **10 ta sinf paketi:** 40,000 so‘m\n"
+    )
 
     msg = (
         f"{status_text}\n"
@@ -110,7 +112,7 @@ async def show_balance_menu(message: types.Message):
         f"👤 {CARD_HOLDER}\n\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"📲 **Hisobni to‘ldirish tartibi:**\n"
-        f"1. Yuqoridagi kartaga to‘lovni bajaring (masalan: 1 ta sinf uchun 5,000 so‘m yoki 4 ta sinf uchun 20,000 so‘m);\n"
+        f"1. Yuqoridagi kartaga to‘lovni bajaring (masalan: 1 ta sinf uchun 5,000 so‘m, 4 ta sinf uchun 15,000 so‘m yoki 10 ta sinf uchun 40,000 so‘m);\n"
         f"2. To‘lov **chekining rasmini (skrinshotini)** pastdagi tugma orqali botga yuboring;\n"
         f"3. Admin 2-5 daqiqa ichida tekshirib tasdiqlaydi va balansingizga sinflar qo‘shiladi!"
     )
@@ -127,9 +129,9 @@ async def show_help_pricing(message: types.Message):
         "ℹ️ **BSB & CHSB Bot — Narxlar va Foydalanish:**\n\n"
         "🎁 **Bepul sinov:** Har bir o‘qituvchiga dastlabki **1 ta sinf hisoboti mutlaqo bepul** beriladi (A4 format va mezon taqsimotini sinab ko‘rishingiz uchun).\n\n"
         f"💵 **Xizmat narxi:**\n"
-        f"• 1 ta to‘liq sinf BSB yoki CHSB hisoboti — **{PRICE_PER_CLASS:,} so‘m**\n"
-        f"• 4 ta sinf (oylik paket) — **20,000 so‘m**\n"
-        f"• 10 ta sinf paketi — **50,000 so‘m**\n\n"
+        f"• 1 ta to‘liq sinf BSB yoki CHSB hisoboti — **5,000 so‘m**\n"
+        f"• 4 ta sinf (oylik paket) — **15,000 so‘m**\n"
+        f"• 10 ta sinf paketi — **40,000 so‘m**\n\n"
         "💳 **To‘lov kartasi:** (ustiga bossangiz nusxalanadi)\n"
         f"`{CARD_NUMBER}`\n"
         f"👤 {CARD_HOLDER}\n\n"
@@ -182,8 +184,8 @@ async def handle_receipt_photo(message: types.Message, state: FSMContext):
             InlineKeyboardButton(text="✅ +2 sinf (10,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_2"),
         ],
         [
-            InlineKeyboardButton(text="✅ +4 sinf (20,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_4"),
-            InlineKeyboardButton(text="✅ +10 sinf (50,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_10"),
+            InlineKeyboardButton(text="✅ +4 sinf (15,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_4"),
+            InlineKeyboardButton(text="✅ +10 sinf (40,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_10"),
         ],
         [
             InlineKeyboardButton(text="❌ Rad etish (Soxta chek)", callback_data=f"reject_{tx_id}_{user_id}")
@@ -336,16 +338,18 @@ async def show_balance_menu(message: types.Message):
     is_admin = (message.from_user.id == ADMIN_ID)
 
     free_status = "❌ Ishlatilgan" if free_used else "🎁 1 ta sinf bepul mavjud!"
-    if is_admin:
-        status_text = "👑 **ADMINSTATUS:** Cheksiz bepul hisobotlar!"
-    else:
-        status_text = (
-            f"👤 **Foydalanuvchi:** {message.from_user.full_name}\n"
-            f"🆔 **ID:** `{message.from_user.id}`\n\n"
-            f"🎁 **Sinov imkoniyati:** {free_status}\n"
-            f"💰 **Mavjud hisobotlar balansi:** **{bal} ta sinf**\n"
-            f"💵 **1 ta sinf hisoboti:** {PRICE_PER_CLASS:,} so‘m\n"
-        )
+    admin_header = "👑 **ADMINSTATUS:** (Siz bot adminisiz — cheksiz huquqqa egasiz)\n\n" if is_admin else ""
+
+    status_text = (
+        f"{admin_header}"
+        f"👤 **Foydalanuvchi:** {message.from_user.full_name}\n"
+        f"🆔 **ID:** `{message.from_user.id}`\n\n"
+        f"🎁 **Sinov imkoniyati:** {free_status}\n"
+        f"💰 **Mavjud hisobotlar balansi:** **{bal} ta sinf**\n"
+        f"💵 **1 ta sinf hisoboti:** 5,000 so‘m\n"
+        f"📦 **4 ta sinf (oylik paket):** 15,000 so‘m\n"
+        f"📦 **10 ta sinf paketi:** 40,000 so‘m\n"
+    )
 
     msg = (
         f"{status_text}\n"
@@ -356,7 +360,7 @@ async def show_balance_menu(message: types.Message):
         f"👤 {CARD_HOLDER}\n\n"
         f"➖➖➖➖➖➖➖➖➖➖\n"
         f"📲 **Hisobni to‘ldirish tartibi:**\n"
-        f"1. Yuqoridagi kartaga to‘lovni bajaring (masalan: 1 ta sinf uchun 5,000 so‘m yoki 4 ta sinf uchun 20,000 so‘m);\n"
+        f"1. Yuqoridagi kartaga to‘lovni bajaring (masalan: 1 ta sinf uchun 5,000 so‘m, 4 ta sinf uchun 15,000 so‘m yoki 10 ta sinf uchun 40,000 so‘m);\n"
         f"2. To‘lov **chekining rasmini (skrinshotini)** pastdagi tugma orqali botga yuboring;\n"
         f"3. Admin 2-5 daqiqa ichida tekshirib tasdiqlaydi va balansingizga sinflar qo‘shiladi!"
     )
@@ -373,9 +377,9 @@ async def show_help_pricing(message: types.Message):
         "ℹ️ **BSB & CHSB Bot — Narxlar va Foydalanish:**\n\n"
         "🎁 **Bepul sinov:** Har bir o‘qituvchiga dastlabki **1 ta sinf hisoboti mutlaqo bepul** beriladi (A4 format va mezon taqsimotini sinab ko‘rishingiz uchun).\n\n"
         f"💵 **Xizmat narxi:**\n"
-        f"• 1 ta to‘liq sinf BSB yoki CHSB hisoboti — **{PRICE_PER_CLASS:,} so‘m**\n"
-        f"• 4 ta sinf (oylik paket) — **20,000 so‘m**\n"
-        f"• 10 ta sinf paketi — **50,000 so‘m**\n\n"
+        f"• 1 ta to‘liq sinf BSB yoki CHSB hisoboti — **5,000 so‘m**\n"
+        f"• 4 ta sinf (oylik paket) — **15,000 so‘m**\n"
+        f"• 10 ta sinf paketi — **40,000 so‘m**\n\n"
         "💳 **To‘lov kartasi:** (ustiga bossangiz nusxalanadi)\n"
         f"`{CARD_NUMBER}`\n"
         f"👤 {CARD_HOLDER}\n\n"
@@ -428,8 +432,8 @@ async def handle_receipt_photo(message: types.Message, state: FSMContext):
             InlineKeyboardButton(text="✅ +2 sinf (10,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_2"),
         ],
         [
-            InlineKeyboardButton(text="✅ +4 sinf (20,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_4"),
-            InlineKeyboardButton(text="✅ +10 sinf (50,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_10"),
+            InlineKeyboardButton(text="✅ +4 sinf (15,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_4"),
+            InlineKeyboardButton(text="✅ +10 sinf (40,000 so‘m)", callback_data=f"approve_{tx_id}_{user_id}_10"),
         ],
         [
             InlineKeyboardButton(text="❌ Rad etish (Soxta chek)", callback_data=f"reject_{tx_id}_{user_id}")
@@ -528,26 +532,65 @@ async def check_access_and_notify(message: types.Message) -> (bool, str):
 async def handle_channel_post(message: types.Message):
     global CURRENT_ARCHIVE_ID
     CURRENT_ARCHIVE_ID = str(message.chat.id)
-    logger.info(f"Avtomatik arxiv kanal ID aniqlandi: {CURRENT_ARCHIVE_ID}")
+    db_service.save_setting("archive_channel_id", CURRENT_ARCHIVE_ID)
+    logger.info(f"Avtomatik arxiv kanal ID aniqlandi va saqlandi: {CURRENT_ARCHIVE_ID}")
 
 @dp.my_chat_member()
 async def handle_my_chat_member(event: types.ChatMemberUpdated):
     global CURRENT_ARCHIVE_ID
     if event.chat.type in ["channel", "supergroup"]:
         CURRENT_ARCHIVE_ID = str(event.chat.id)
-        logger.info(f"Bot kanal/guruhga a'zo qilindi: {CURRENT_ARCHIVE_ID}")
+        db_service.save_setting("archive_channel_id", CURRENT_ARCHIVE_ID)
+        logger.info(f"Bot kanal/guruhga a'zo qilindi va saqlandi: {CURRENT_ARCHIVE_ID}")
+
+@dp.message(F.forward_origin)
+async def handle_forward_origin(message: types.Message):
+    global CURRENT_ARCHIVE_ID
+    origin = message.forward_origin
+    if getattr(origin, "type", "") == "channel" and getattr(origin, "chat", None):
+        CURRENT_ARCHIVE_ID = str(origin.chat.id)
+        db_service.save_setting("archive_channel_id", CURRENT_ARCHIVE_ID)
+        logger.info(f"Forward origin orqali kanal ID aniqlandi: {CURRENT_ARCHIVE_ID}")
+        await message.answer(
+            f"✅ **Kanal muvaffaqiyatli ulandi va saqlandi!**\n\n"
+            f"📢 Kanal: **{origin.chat.title or 'Nomsiz'}**\n"
+            f"🆔 ID: `{CURRENT_ARCHIVE_ID}`\n\n"
+            f"Endi bot yaratgan barcha Excel hisobotlar to‘g‘ridan-to‘g‘ri shu kanalingizga ham avtomatik tashlanadi!",
+            parse_mode="Markdown"
+        )
 
 @dp.message(F.forward_from_chat)
 async def handle_forward(message: types.Message):
     global CURRENT_ARCHIVE_ID
-    if message.forward_from_chat.type == "channel":
+    if message.forward_from_chat and message.forward_from_chat.type == "channel":
         CURRENT_ARCHIVE_ID = str(message.forward_from_chat.id)
+        db_service.save_setting("archive_channel_id", CURRENT_ARCHIVE_ID)
         logger.info(f"Forward orqali kanal ID aniqlandi: {CURRENT_ARCHIVE_ID}")
         await message.answer(
-            f"✅ **Kanal muvaffaqiyatli ulandi!**\n\n"
+            f"✅ **Kanal muvaffaqiyatli ulandi va saqlandi!**\n\n"
             f"📢 Kanal: **{message.forward_from_chat.title or 'Nomsiz'}**\n"
             f"🆔 ID: `{CURRENT_ARCHIVE_ID}`\n\n"
             f"Endi bot yaratgan barcha Excel hisobotlar to‘g‘ridan-to‘g‘ri shu kanalingizga ham avtomatik tashlanadi!",
+            parse_mode="Markdown"
+        )
+
+@dp.message(Command("setchannel"))
+@dp.message(Command("kanal"))
+async def cmd_set_channel(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    parts = message.text.split()
+    if len(parts) > 1:
+        cid = parts[1].strip()
+        global CURRENT_ARCHIVE_ID
+        CURRENT_ARCHIVE_ID = cid
+        db_service.save_setting("archive_channel_id", cid)
+        await message.answer(f"✅ **Kanal ID saqlandi:** `{cid}`\n\nEndi barcha hisobotlar shu kanalga yuboriladi.", parse_mode="Markdown")
+    else:
+        curr = CURRENT_ARCHIVE_ID or db_service.get_setting("archive_channel_id", "") or "Ulanmagan"
+        await message.answer(
+            f"📢 **Hozirgi arxiv kanal ID:** `{curr}`\n\n"
+            f"O‘zgartirish uchun: `/setchannel -100xxxxxxxxxx` deb yozing.",
             parse_mode="Markdown"
         )
 
@@ -569,12 +612,21 @@ async def start_cmd(message: types.Message, state: FSMContext):
 
 async def send_to_archive(doc_path: str, caption: str):
     global CURRENT_ARCHIVE_ID
+    if not CURRENT_ARCHIVE_ID:
+        CURRENT_ARCHIVE_ID = db_service.get_setting("archive_channel_id", "") or ARCHIVE_CHANNEL_ID
     if CURRENT_ARCHIVE_ID:
         try:
             doc = FSInputFile(doc_path)
             await bot.send_document(CURRENT_ARCHIVE_ID, doc, caption=caption)
+            return
         except Exception as e:
-            logger.warning(f"Arxiv kanalga jo'natilmadi: {e}")
+            logger.warning(f"Arxiv kanalga jo'natilmadi ({CURRENT_ARCHIVE_ID}): {e}")
+    # Backup failsafe to Admin ID
+    try:
+        doc_adm = FSInputFile(doc_path)
+        await bot.send_document(ADMIN_ID, doc_adm, caption=f"📁 **Arxiv nusxasi (Admin):**\n{caption}")
+    except Exception as e2:
+        logger.warning(f"Adminga arxiv nusxa jo'natilmadi: {e2}")
 
 # ==================== 1-REJIM: BSB BALLAR ORQALI ====================
 @dp.message(F.text.contains("1️⃣ BSB (Ballar orqali)"))
@@ -1501,7 +1553,14 @@ async def main():
     logger.info(f"Health server port {port} da ishga tushdi.")
 
     logger.info("BSB va CHSB Hisobot Boti ishga tushmoqda...")
-    await dp.start_polling(bot)
+    await dp.start_polling(
+        bot,
+        allowed_updates=[
+            "message", "edited_message", "channel_post",
+            "edited_channel_post", "callback_query",
+            "my_chat_member", "chat_member"
+        ]
+    )
 
 if __name__ == "__main__":
     asyncio.run(main())
