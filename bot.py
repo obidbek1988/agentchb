@@ -1479,18 +1479,18 @@ async def mode4_start(message: types.Message, state: FSMContext):
         "📍 **1-QADAM (3 tadan): CHSB Baholash mezonini yuboring**\n"
         "*(Rasm, PDF yoki pastdagi standart tugma orqali)*\n\n"
         "📋 **MEZON UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
-        "Respublika standart 40 ballik CHSB mezonida ballar taqsimoti:\n"
-        "• **(B) Bilish:** 1–6 savollar (har biri 1 balldan = **6 ball**)\n"
-        "• **(Q) Qo‘llash:** 7–18 savollar (har biri 2 balldan = **24 ball**)\n"
-        "• **(M) Mulohaza:** 19–20 savollar (har biri 5 balldan = **10 ball**)\n"
-        "Jami: **40 ball**\n\n"
+        "Respublika standart 40 ballik CHSB mezonida (jami 15 ta test):\n"
+        "• **(B) Bilish:** 1–5 savollar (jami: **6 ball**)\n"
+        "• **(Q) Qo‘llash:** 6–12 savollar (jami: **24 ball**)\n"
+        "• **(M) Mulohaza:** 13–15 savollar (jami: **10 ball**)\n"
+        "Jami: **15 ta test — 40 ball**\n\n"
         "💡 _Agar sizda maxsus mezon bo‘lsa, rasmini/PDF yuboring. Standart 40 ballik mezon uchun esa pastdagi tugmani bosing:_"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "m4_std_criteria")
 async def cb_m4_std_criteria(callback: CallbackQuery, state: FSMContext):
-    std_criteria_desc = "Standart CHSB 40 ballik: (B) Bilish 1-6 (6 ball), (Q) Qo'llash 7-18 (24 ball), (M) Mulohaza 19-20 (10 ball)."
+    std_criteria_desc = "Standart CHSB 40 ballik (jami 15 ta test): (B) Bilish 1-5 (6 ball), (Q) Qo'llash 6-12 (24 ball), (M) Mulohaza 13-15 (10 ball). Jami 40 ball."
     await state.update_data(criteria_text=std_criteria_desc, criteria_path="")
     await callback.answer("Standart mezon tanlandi!")
     await state.set_state(BotStates.m4_keys)
@@ -1545,7 +1545,7 @@ async def ask_m4_keys(message: types.Message):
         "*(Matn ko‘rinishida yoki rasm/PDF formatida)*\n\n"
         "🔑 **KALIT UCHUN NAMUNA (Qanday yuborish kerak?):**\n"
         "1️⃣ **Matn ko‘rinishida** botga yozib yuborishingiz mumkin:\n"
-        "`1-A, 2-B, 3-C, 4-D, 5-A, 6-B, 7-C, 8-D, 9-A, 10-B, 11-C, 12-D, 13-A, 14-B, 15-C, 16-D, 17-A, 18-B, 19-C, 20-D`\n\n"
+        "`1-A, 2-B, 3-C, 4-D, 5-A, 6-B, 7-C, 8-D, 9-A, 10-B, 11-C, 12-D, 13-A, 14-B, 15-C`\n\n"
         "2️⃣ **Yoki to‘g‘ri javoblar jadvali / kalit tushirilgan kitobcha fotosuratini** yuboring!\n\n"
         "📸 _Iltimos, to‘g‘ri javoblar kalitini yozing yoki rasmini yuboring:_"
     )

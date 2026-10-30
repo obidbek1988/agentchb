@@ -354,7 +354,7 @@ Javob FAQAT sof JSON bo'lsin.
             else:
                 crit_desc = f"Baholash mezoni: {criteria_input}"
         else:
-            crit_desc = "Standart CHSB mezoni: (B) Bilish 1-6 savollar (6 ball), (Q) Qo'llash 7-18 savollar (24 ball), (M) Mulohaza 19-20 savollar (10 ball). Jami: 40 ball."
+            crit_desc = "Standart CHSB mezoni (jami 15 ta test): (B) Bilish 1-5 savollar (6 ball), (Q) Qo'llash 6-12 savollar (24 ball), (M) Mulohaza 13-15 savollar (10 ball). Jami: 40 ball."
 
         # 2. Key description
         if is_text_key:
