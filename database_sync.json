@@ -1,5 +1,7 @@
 {
   "users": [],
   "transactions": [],
-  "archive_channel_id": ""
+  "settings": {
+    "archive_channel_id": "-1004488864085"
+  }
 }
