@@ -162,7 +162,7 @@ Javob FAQAT sof JSON bo'lsin.
         return res
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
-    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False) -> Dict[str, Any]:
         batch_size = 4
         all_students = []
         final_info = {}
@@ -176,7 +176,7 @@ Javob FAQAT sof JSON bo'lsin.
                 percent = int((current_count / total_works) * 100)
                 await progress_callback(f"⏳ Tekshirilmoqda: {current_count} / {total_works} ta o‘quvchi ({percent}%)...")
 
-            res = await queue_manager.execute_task(self._call_eval_works_vision, criteria_img_path, batch, start_tr=i+1)
+            res = await queue_manager.execute_task(self._call_eval_works_vision, criteria_img_path, batch, start_tr=i+1, keys_input=keys_input, is_text_key=is_text_key)
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
             if not criteria_list and "criteria" in res:
@@ -199,13 +199,34 @@ Javob FAQAT sof JSON bo'lsin.
             "students": all_students
         }
 
-    def _call_eval_works_vision(self, criteria_img_path: str, work_img_paths: List[str], start_tr: int = 1) -> Dict[str, Any]:
+    def _call_eval_works_vision(self, criteria_img_path: str, work_img_paths: List[str], start_tr: int = 1, keys_input: str = "", is_text_key: bool = False) -> Dict[str, Any]:
+        all_imgs = []
+        if criteria_img_path and os.path.exists(criteria_img_path):
+            all_imgs.append(criteria_img_path)
+            crit_desc = "1-rasm: BSB Baholash mezonlari (savollar va har bir topshiriq uchun maksimal ballar)."
+        else:
+            crit_desc = "BSB Baholash mezoni topshiriqlar bo'yicha mezon asosida."
+
+        if keys_input:
+            if is_text_key:
+                key_desc = f"To'g'ri javoblar / yechimlar kaliti:\n{keys_input}"
+            elif os.path.exists(keys_input):
+                all_imgs.append(keys_input)
+                key_desc = f"{len(all_imgs)}-rasm: To'g'ri javoblar va yechimlar kaliti."
+            else:
+                key_desc = f"To'g'ri javoblar / yechimlar: {keys_input}"
+        else:
+            key_desc = "To'g'ri javoblar mezon bilan birga keltirilgan."
+
+        all_imgs.extend(work_img_paths)
+
         prompt = f"""
 Siz tajribali o'qituvchisiz.
-1-rasm: BSB Baholash mezonlari (savollar, topshiriqlar va baholash mezonlari).
+{crit_desc}
+{key_desc}
 Keyingi rasmlar: O'quvchilarning daftardagi yoki qog'ozdagi yozma ishlari.
 
-Har bir o'quvchining ishini mezonga qarab tekshiring:
+Har bir o'quvchining ishini mezonga va to'g'ri javoblar kalitiga qarab tekshiring:
 - O'quvchining ism-familiyasini aniqlang;
 - Har bir topshiriq uchun to'g'riligiga qarab ball bering;
 - Jami to'plagan ballini hisoblang;
@@ -242,7 +263,6 @@ Quyidagi JSON formatida qaytaring:
 }}
 Javob FAQAT sof JSON bo'lsin.
 """
-        all_imgs = [criteria_img_path] + work_img_paths
         return self._send_prompt_to_gemini(prompt, all_imgs)
 
     # 3-TUGMA: CHSB ballar bo'yicha (B, Q, M mezonlari)
@@ -289,7 +309,7 @@ Javob FAQAT sof JSON bo'lsin.
         return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
 
     # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
-    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False) -> Dict[str, Any]:
+    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False) -> Dict[str, Any]:
         batch_size = 4
         all_students = []
         final_info = {}
@@ -302,7 +322,7 @@ Javob FAQAT sof JSON bo'lsin.
                 percent = int((current_count / total_tests) * 100)
                 await progress_callback(f"⏳ Testlar tekshirilmoqda: {current_count} / {total_tests} ta o‘quvchi ({percent}%)...")
 
-            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_input, batch, start_tr=i+1, is_text_key=is_text_key)
+            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_input, batch, start_tr=i+1, is_text_key=is_text_key, criteria_input=criteria_input, is_text_criteria=is_text_criteria)
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
 
@@ -321,21 +341,40 @@ Javob FAQAT sof JSON bo'lsin.
             "students": all_students
         }
 
-    def _call_eval_tests_vision(self, keys_input: str, student_test_img_paths: List[str], start_tr: int = 1, is_text_key: bool = False) -> Dict[str, Any]:
+    def _call_eval_tests_vision(self, keys_input: str, student_test_img_paths: List[str], start_tr: int = 1, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False) -> Dict[str, Any]:
+        all_imgs = []
+
+        # 1. Criteria description
+        if criteria_input:
+            if is_text_criteria:
+                crit_desc = f"Baholash mezoni:\n{criteria_input}"
+            elif os.path.exists(criteria_input):
+                all_imgs.append(criteria_input)
+                crit_desc = f"{len(all_imgs)}-rasm: CHSB Baholash mezoni jadvali."
+            else:
+                crit_desc = f"Baholash mezoni: {criteria_input}"
+        else:
+            crit_desc = "Standart CHSB mezoni: (B) Bilish 1-6 savollar (6 ball), (Q) Qo'llash 7-18 savollar (24 ball), (M) Mulohaza 19-20 savollar (10 ball). Jami: 40 ball."
+
+        # 2. Key description
         if is_text_key:
             key_desc = f"To'g'ri javoblar kaliti:\n{keys_input}"
-            all_imgs = student_test_img_paths
+        elif keys_input and os.path.exists(keys_input):
+            all_imgs.append(keys_input)
+            key_desc = f"{len(all_imgs)}-rasm: CHSB test savollarining to'g'ri javoblari kaliti (masalan: 1-A, 2-D, 3-C...)."
         else:
-            key_desc = "1-rasm: CHSB test savollarining to'g'ri javoblari kaliti (masalan: 1-A, 2-D, 3-C...) va mezonlari."
-            all_imgs = [keys_input] + student_test_img_paths
+            key_desc = f"To'g'ri javoblar kaliti: {keys_input}"
+
+        all_imgs.extend(student_test_img_paths)
 
         prompt = f"""
 Siz test javoblarini tekshiruvchi mutaxassissiz.
+{crit_desc}
 {key_desc}
-O'quvchilarning belgilagan test javoblari varaqalari rasmlari taqdim etilgan.
+Keyingi rasmlar: O'quvchilarning belgilagan test javoblari varaqalari rasmlari.
 
 Vazifangiz:
-Har bir o'quvchining belgilagan javoblarini to'g'ri kalit bilan solishtirib tekshiring:
+Har bir o'quvchining belgilagan javoblarini to'g'ri kalit va baholash mezoni bilan solishtirib tekshiring:
 - O'quvchi F.I.O;
 - To'g'ri topilgan testlar ballarini hisoblang: (B) Bilish, (Q) Qo'llash, (M) Mulohaza mezonlari bo'yicha ajrating;
 - Jami to'plagan ballini hisoblang (maksimal 40 ball);

@@ -69,11 +69,13 @@ class BotStates(StatesGroup):
     m1_criteria = State()
 
     m2_criteria = State()
+    m2_keys = State()
     m2_works = State()
 
     m3_journal = State()
     m3_criteria = State()
 
+    m4_criteria = State()
     m4_keys = State()
     m4_student_tests = State()
 
@@ -1015,14 +1017,23 @@ async def mode2_start(message: types.Message, state: FSMContext):
         return
 
     await state.clear()
-    await state.update_data(credit_type=credit_type)
+    await state.update_data(credit_type=credit_type, works_paths=[])
     await state.set_state(BotStates.m2_criteria)
-    await message.answer(
-        "✍️ **2-REJIM: BSB o‘quvchilar ishini tekshirish**\n\n"
-        "1-qadam: BSB **savollari va baholash mezonlari rasmini yoki PDF faylini** yuboring:",
-        reply_markup=get_action_keyboard(),
-        parse_mode="Markdown"
+
+    msg_text = (
+        "✍️ **2-REJIM: BSB o‘quvchilar yozma ishini tekshirish**\n\n"
+        "📍 **1-QADAM (3 tadan): BSB Baholash mezonini yuboring**\n"
+        "*(Rasm yoki PDF formatida)*\n\n"
+        "📋 **MEZON UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
+        "Mezonda BSB topshiriqlari va har biriga qo‘yiladigan ballar ko‘rsatiladi:\n"
+        "• 1-topshiriq (Nazariy/qisqa savol): **5 ball**\n"
+        "• 2-topshiriq (Amaliy mashq): **10 ball**\n"
+        "• 3-topshiriq (Masala yechish): **10 ball**\n"
+        "• 4-topshiriq (Loyiha / ijodiy ish): **15 ball**\n"
+        "*(Jami: 25, 40 yoki 50 ball)*\n\n"
+        "📸 _Iltimos, BSB baholash mezoni jadvali fotosuratini yoki PDF faylini yuboring:_"
     )
+    await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
 
 @dp.message(BotStates.m2_criteria, F.document)
 async def mode2_criteria_doc(message: types.Message, state: FSMContext):
@@ -1035,16 +1046,10 @@ async def mode2_criteria_doc(message: types.Message, state: FSMContext):
             status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, o‘qilmoqda...")
             images = pdf_to_images(pdf_path)
             cpath = images[0] if images else pdf_path
-            await state.update_data(criteria_path=cpath, works_paths=[])
+            await state.update_data(criteria_path=cpath)
             await status_pdf.delete()
-            await state.set_state(BotStates.m2_works)
-            await message.answer(
-                "✅ Mezon PDF qabul qilindi!\n\n"
-                "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini yoki PDF fayllarini** yuboring (ketma-ket yuboravering).\n\n"
-                "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-                reply_markup=get_action_keyboard(show_finish=True),
-                parse_mode="Markdown"
-            )
+            await state.set_state(BotStates.m2_keys)
+            await ask_m2_keys(message)
         except Exception as e:
             logger.error(f"Mode 2 Criteria PDF error: {e}")
             await message.answer("❌ PDF faylni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
@@ -1056,20 +1061,88 @@ async def mode2_criteria(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     cpath = f"temp/m2_c_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=cpath)
-    await state.update_data(criteria_path=cpath, works_paths=[])
+    await state.update_data(criteria_path=cpath)
+
+    await state.set_state(BotStates.m2_keys)
+    await ask_m2_keys(message)
+
+async def ask_m2_keys(message: types.Message):
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Kalit mezonda bor (Keyingi qadam)", callback_data="m2_skip_keys")]
+    ])
+    msg_text = (
+        "✅ **BSB baholash mezoni qabul qilindi!**\n\n"
+        "📍 **2-QADAM (3 tadan): To‘g‘ri javoblar KALITINI yuboring**\n"
+        "*(Matn, rasm yoki PDF ko‘rinishida)*\n\n"
+        "🔑 **KALIT UCHUN NAMUNA (Qanday yuborish kerak?):**\n"
+        "1️⃣ **Matn ko‘rinishida** botga yozib yuborishingiz mumkin:\n"
+        "• 1-topshiriq javobi: Axborot — bu atrof-muhit haqidagi maʼlumotlar to‘plami...\n"
+        "• 2-topshiriq javobi: Algoritm chiziqli, tarmoqlanuvchi va takrorlanuvchi bo‘ladi.\n"
+        "• 3-topshiriq javobi: Natija: X = 120, Y = 45...\n\n"
+        "2️⃣ **Yoki to‘g‘ri javoblar/yechimlar yozilgan varaq fotosuratini** yuboring!\n\n"
+        "💡 _Agar to‘g‘ri javoblar kaliti mezon varag‘ining o‘zida bo‘lsa, pastdagi **'⚡ Kalit mezonda bor'** tugmasini bosing:_"
+    )
+    await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m2_skip_keys")
+async def cb_m2_skip_keys(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(keys_path="", keys_text="Mezonda ko'rsatilgan")
+    await callback.answer("Keyingi qadamga o'tildi")
+    await state.set_state(BotStates.m2_works)
+    await ask_m2_works(callback.message)
+
+@dp.message(BotStates.m2_keys, F.text)
+async def mode2_keys_text(message: types.Message, state: FSMContext):
+    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(keys_text=message.text.strip(), keys_path="")
+    await state.set_state(BotStates.m2_works)
+    await ask_m2_works(message)
+
+@dp.message(BotStates.m2_keys, F.document)
+async def mode2_keys_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m2_k_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            images = pdf_to_images(pdf_path)
+            kpath = images[0] if images else pdf_path
+            await state.update_data(keys_path=kpath, keys_text="")
+            await state.set_state(BotStates.m2_works)
+            await ask_m2_works(message)
+        except Exception as e:
+            logger.error(f"Mode 2 Keys PDF error: {e}")
+            await message.answer("❌ PDF kalitni ochishda xatolik yuz berdi. Rasm yuboring.")
+    else:
+        await message.answer("Iltimos, kalitni rasm yoki matn ko‘rinishida yuboring.")
+
+@dp.message(BotStates.m2_keys, F.photo)
+async def mode2_keys_photo(message: types.Message, state: FSMContext):
+    os.makedirs("temp", exist_ok=True)
+    kpath = f"temp/m2_k_{message.from_user.id}_{message.message_id}.jpg"
+    await bot.download(message.photo[-1], destination=kpath)
+    await state.update_data(keys_path=kpath, keys_text="")
 
     await state.set_state(BotStates.m2_works)
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m2_single_image_process")]
-    ])
-    await message.answer(
-        "✅ **BSB mezoni qabul qilindi!**\n\n"
-        "2-qadam: Endi **o‘quvchilarning daftardagi/qog‘ozdagi ishlarining rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
-        "• Agar siz faqat shu 1 dona rasmni tekshirmoqchi bo‘lsangiz, pastdagi **'⚡ Faqat shu 1 ta rasmni tekshirish'** tugmasini bosing;\n"
-        "• O‘quvchi ishlarini yuborgach, **'🚀 Hisobotni tayyorlash'** tugmasi orqali hisobotni oling!",
-        reply_markup=ikb,
-        parse_mode="Markdown"
+    await ask_m2_works(message)
+
+async def ask_m2_works(message: types.Message):
+    msg_text = (
+        "✅ **To‘g‘ri javoblar kaliti qabul qilindi!**\n\n"
+        "📍 **3-QADAM (3 tadan): O‘quvchilarning daftardagi/qog‘ozdagi yozma ishlari rasmlarini yuboring**\n"
+        "*(Ketma-ket 30 tagacha rasm yoki umumiy PDF fayl yuborishingiz mumkin)*\n\n"
+        "📝 **O‘QUVCHI ISHI UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
+        "• O‘quvchining daftari yoki toza oq qog‘ozga yozgan BSB topshiriqlari yechimlari;\n"
+        "• Varaqning yuqorisida **o‘quvchining ismi va familiyasi** (masalan: _Rahimova Madina 8-B_) aniq ko‘rinishi shart;\n"
+        "• Har bir topshiriq raqami va yozuvi tushunarli yoritilgan bo‘lsin.\n\n"
+        "📸 _O‘quvchilar daftarlari rasmlarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
+    await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m2_works, F.document)
 async def mode2_works_doc(message: types.Message, state: FSMContext):
@@ -1084,9 +1157,15 @@ async def mode2_works_doc(message: types.Message, state: FSMContext):
             wlist = data.get("works_paths", [])
             wlist.extend(images)
             await state.update_data(works_paths=wlist)
+            ikb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(wlist)} ta ish)", callback_data="m2_finish_now")]
+            ])
             await message.answer(
-                f"📥 PDF dan {len(images)} ta sahifa qo‘shildi (Jami ishlar: {len(wlist)} ta). Yana yuboring yoki 'Tayyorlang' tugmasini bosing.",
-                reply_markup=get_action_keyboard(show_finish=True)
+                f"📥 PDF dan {len(images)} ta sahifa qo‘shildi (Jami ishlar: {len(wlist)} ta).\n\n"
+                f"• Yana ishlar bo‘lsa, yuboravering;\n"
+                f"• Tayyor bo‘lsa, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing!",
+                reply_markup=ikb,
+                parse_mode="Markdown"
             )
         except Exception as e:
             logger.error(f"Mode 2 Works PDF error: {e}")
@@ -1106,7 +1185,8 @@ async def mode2_photo(message: types.Message, state: FSMContext):
     await state.update_data(works_paths=wlist)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(wlist)} ta ish)", callback_data="m2_finish_now")]
+        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(wlist)} ta ish)", callback_data="m2_finish_now")],
+        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m2_single_image_process")]
     ])
     await message.answer(
         f"📥 **{len(wlist)}-o‘quvchi ishi qabul qilindi.**\n\n"
@@ -1119,9 +1199,11 @@ async def mode2_photo(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "m2_single_image_process")
 async def cb_m2_single(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    cpath = data.get("criteria_path", "")
-    if cpath:
-        await state.update_data(works_paths=[cpath])
+    wlist = data.get("works_paths", [])
+    if not wlist:
+        cpath = data.get("criteria_path", "")
+        if cpath:
+            await state.update_data(works_paths=[cpath])
     await callback.answer("⏳ BSB tekshirish boshlanmoqda...")
     await mode2_finish(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
 
@@ -1137,14 +1219,19 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
     actual_username = username or (message.from_user.username if message.from_user and message.from_user.username else str(actual_user_id))
 
     data = await state.get_data()
-    cpath = data.get("criteria_path")
+    cpath = data.get("criteria_path", "")
+    kpath = data.get("keys_path", "")
+    ktext = data.get("keys_text", "")
     wlist = data.get("works_paths", [])
 
     if not wlist:
         await message.answer("Iltimos, avval kamida bitta o‘quvchi ishi rasmini yuboring.")
         return
 
-    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(wlist)} nafar o‘quvchining ishi 4 tadan bo‘lib tekshirilmoqda...")
+    is_text_key = bool(ktext)
+    keys_input = ktext if is_text_key else kpath
+
+    status_msg = await message.answer(f"⏳ Navbatga olindi. {len(wlist)} nafar o‘quvchining daftardagi ishlari 4 tadan bo‘lib tekshirilmoqda...")
 
     async def update_progress(text):
         try:
@@ -1172,7 +1259,9 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
         parsed = await ai_service.evaluate_student_works(
             cpath, wlist,
             progress_callback=update_progress,
-            batch_callback=send_batch_works_results
+            batch_callback=send_batch_works_results,
+            keys_input=keys_input,
+            is_text_key=is_text_key
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{actual_user_id}_{cname}_bsb_evaluated.xlsx"
@@ -1379,14 +1468,99 @@ async def mode4_start(message: types.Message, state: FSMContext):
         return
 
     await state.clear()
-    await state.update_data(credit_type=credit_type)
-    await state.set_state(BotStates.m4_keys)
-    await message.answer(
+    await state.update_data(credit_type=credit_type, test_paths=[])
+    await state.set_state(BotStates.m4_criteria)
+
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚡ Standart mezon (6, 24, 10 ball)", callback_data="m4_std_criteria")]
+    ])
+    msg_text = (
         "🎯 **4-REJIM: CHSB Testlarni tekshirish va hisobot tuzish**\n\n"
-        "1-qadam: Testning **to‘g‘ri javoblar kaliti va mezoni rasmini yoki PDF faylini** yuboring:",
-        reply_markup=get_action_keyboard(),
-        parse_mode="Markdown"
+        "📍 **1-QADAM (3 tadan): CHSB Baholash mezonini yuboring**\n"
+        "*(Rasm, PDF yoki pastdagi standart tugma orqali)*\n\n"
+        "📋 **MEZON UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
+        "Respublika standart 40 ballik CHSB mezonida ballar taqsimoti:\n"
+        "• **(B) Bilish:** 1–6 savollar (har biri 1 balldan = **6 ball**)\n"
+        "• **(Q) Qo‘llash:** 7–18 savollar (har biri 2 balldan = **24 ball**)\n"
+        "• **(M) Mulohaza:** 19–20 savollar (har biri 5 balldan = **10 ball**)\n"
+        "Jami: **40 ball**\n\n"
+        "💡 _Agar sizda maxsus mezon bo‘lsa, rasmini/PDF yuboring. Standart 40 ballik mezon uchun esa pastdagi tugmani bosing:_"
     )
+    await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_std_criteria")
+async def cb_m4_std_criteria(callback: CallbackQuery, state: FSMContext):
+    std_criteria_desc = "Standart CHSB 40 ballik: (B) Bilish 1-6 (6 ball), (Q) Qo'llash 7-18 (24 ball), (M) Mulohaza 19-20 (10 ball)."
+    await state.update_data(criteria_text=std_criteria_desc, criteria_path="")
+    await callback.answer("Standart mezon tanlandi!")
+    await state.set_state(BotStates.m4_keys)
+    await ask_m4_keys(callback.message)
+
+@dp.message(BotStates.m4_criteria, F.document)
+async def mode4_criteria_doc(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if fname.endswith(".pdf"):
+        os.makedirs("temp", exist_ok=True)
+        pdf_path = f"temp/m4_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        await bot.download(message.document, destination=pdf_path)
+        try:
+            status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, o‘qilmoqda...")
+            images = pdf_to_images(pdf_path)
+            cpath = images[0] if images else pdf_path
+            await state.update_data(criteria_path=cpath, criteria_text="")
+            await status_pdf.delete()
+            await state.set_state(BotStates.m4_keys)
+            await ask_m4_keys(message)
+        except Exception as e:
+            logger.error(f"Mode 4 Criteria PDF error: {e}")
+            await message.answer("❌ PDF mezonni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
+    else:
+        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
+
+@dp.message(BotStates.m4_criteria, F.photo)
+async def mode4_criteria_photo(message: types.Message, state: FSMContext):
+    os.makedirs("temp", exist_ok=True)
+    cpath = f"temp/m4_c_{message.from_user.id}_{message.message_id}.jpg"
+    await bot.download(message.photo[-1], destination=cpath)
+    await state.update_data(criteria_path=cpath, criteria_text="")
+
+    await state.set_state(BotStates.m4_keys)
+    await ask_m4_keys(message)
+
+@dp.message(BotStates.m4_criteria, F.text)
+async def mode4_criteria_text(message: types.Message, state: FSMContext):
+    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(criteria_text=message.text.strip(), criteria_path="")
+    await state.set_state(BotStates.m4_keys)
+    await ask_m4_keys(message)
+
+async def ask_m4_keys(message: types.Message):
+    msg_text = (
+        "✅ **CHSB Baholash mezoni qabul qilindi!**\n\n"
+        "📍 **2-QADAM (3 tadan): Testning to‘g‘ri javoblar KALITINI yuboring**\n"
+        "*(Matn ko‘rinishida yoki rasm/PDF formatida)*\n\n"
+        "🔑 **KALIT UCHUN NAMUNA (Qanday yuborish kerak?):**\n"
+        "1️⃣ **Matn ko‘rinishida** botga yozib yuborishingiz mumkin:\n"
+        "`1-A, 2-B, 3-C, 4-D, 5-A, 6-B, 7-C, 8-D, 9-A, 10-B, 11-C, 12-D, 13-A, 14-B, 15-C, 16-D, 17-A, 18-B, 19-C, 20-D`\n\n"
+        "2️⃣ **Yoki to‘g‘ri javoblar jadvali / kalit tushirilgan kitobcha fotosuratini** yuboring!\n\n"
+        "📸 _Iltimos, to‘g‘ri javoblar kalitini yozing yoki rasmini yuboring:_"
+    )
+    await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
+
+@dp.message(BotStates.m4_keys, F.text)
+async def mode4_keys_text(message: types.Message, state: FSMContext):
+    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
+        return
+
+    await state.update_data(keys_text=message.text.strip(), keys_path="")
+    await state.set_state(BotStates.m4_student_tests)
+    await ask_m4_student_tests(message)
 
 @dp.message(BotStates.m4_keys, F.document)
 async def mode4_keys_doc(message: types.Message, state: FSMContext):
@@ -1396,61 +1570,41 @@ async def mode4_keys_doc(message: types.Message, state: FSMContext):
         pdf_path = f"temp/m4_k_pdf_{message.from_user.id}_{message.message_id}.pdf"
         await bot.download(message.document, destination=pdf_path)
         try:
-            status_pdf = await message.answer("📄 Kalit/Mezon PDF qabul qilindi, o‘qilmoqda...")
+            status_pdf = await message.answer("📄 Kalit PDF qabul qilindi, o‘qilmoqda...")
             images = pdf_to_images(pdf_path)
             kpath = images[0] if images else pdf_path
-            await state.update_data(keys_path=kpath, test_paths=[])
+            await state.update_data(keys_path=kpath, keys_text="")
             await status_pdf.delete()
             await state.set_state(BotStates.m4_student_tests)
-            await message.answer(
-                "✅ Test kaliti PDF qabul qilindi!\n\n"
-                "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF fayllarini** yuboring (ketma-ket yuboravering).\n\n"
-                "Barchasini yuborib bo‘lgach, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-                reply_markup=get_action_keyboard(show_finish=True),
-                parse_mode="Markdown"
-            )
+            await ask_m4_student_tests(message)
         except Exception as e:
             logger.error(f"Mode 4 Keys PDF error: {e}")
-            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
+            await message.answer("❌ PDF kalitni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
     else:
-        await message.answer("Iltimos, test kalitini rasm yoki PDF formatida yuboring.")
-
-@dp.message(BotStates.m4_keys, F.text)
-async def mode4_keys_text(message: types.Message, state: FSMContext):
-    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
-        await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard())
-        return
-
-    await state.update_data(keys_text=message.text.strip(), keys_path="", test_paths=[])
-    await state.set_state(BotStates.m4_student_tests)
-    await message.answer(
-        "✅ **To‘g‘ri javoblar kaliti matn sifatida qabul qilindi!**\n\n"
-        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini yoki PDF faylini** yuboring (bir nechta bo‘lsa ketma-ket yuboravering).\n\n"
-        "Barcha rasmlarni yuborib bo‘lgach, hisobotni boshlash uchun pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-        reply_markup=get_action_keyboard(show_finish=True),
-        parse_mode="Markdown"
-    )
+        await message.answer("Iltimos, test kalitini rasm yoki matn ko‘rinishida yuboring.")
 
 @dp.message(BotStates.m4_keys, F.photo)
 async def mode4_keys(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     kpath = f"temp/m4_k_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=kpath)
-    await state.update_data(keys_path=kpath, keys_text="", test_paths=[])
+    await state.update_data(keys_path=kpath, keys_text="")
 
     await state.set_state(BotStates.m4_student_tests)
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m4_single_image_process")]
-    ])
-    await message.answer(
-        "✅ **Test kaliti qabul qilindi!**\n\n"
-        "2-qadam: Endi **o‘quvchilarning test javoblari varaqalari rasmlarini** yuboring (30 ta bo‘lsa ham ketma-ket yuboravering).\n\n"
-        "• Agar siz faqat shu 1 dona rasmni tekshirmoqchi bo‘lsangiz, pastdagi **'⚡ Faqat shu 1 ta rasmni tekshirish'** tugmasini bosing;\n"
-        "• O‘quvchi rasmini yuborgach, **'Hisobotni tayyorlang'** tugmasi orqali natijani oling!",
-        reply_markup=ikb,
-        parse_mode="Markdown"
+    await ask_m4_student_tests(message)
+
+async def ask_m4_student_tests(message: types.Message):
+    msg_text = (
+        "✅ **To‘g‘ri javoblar kaliti qabul qilindi!**\n\n"
+        "📍 **3-QADAM (3 tadan): Endi o‘quvchilarning test javoblari varaqalari rasmlarini yuboring**\n"
+        "*(Ketma-ket 30 tagacha rasm yoki bitta umumiy PDF fayl yuborishingiz mumkin)*\n\n"
+        "📝 **O‘QUVCHI ISHI UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
+        "• O‘quvchi belgilagan test titul varaqasi yoki daftardagi javoblar ro‘yxati;\n"
+        "• Yoki test kitobchasi ustida o‘quvchi ruchka/qalam bilan belgilagan variantlar (A, B, C, D);\n"
+        "• Varaq boshida **o‘quvchining F.I.O.si** (masalan: _Olimov Sardor 6-G_) aniq ko‘rinishi kerak.\n\n"
+        "📸 _O‘quvchilar test varaqalari rasmlarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
+    await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m4_student_tests, F.document)
 async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
@@ -1465,9 +1619,15 @@ async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
             tlist = data.get("test_paths", [])
             tlist.extend(images)
             await state.update_data(test_paths=tlist)
+            ikb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(tlist)} ta o‘quvchi)", callback_data="m4_finish_now")]
+            ])
             await message.answer(
-                f"📥 PDF dan {len(images)} ta sahifa qo‘shildi (Jami testlar: {len(tlist)} ta). Yana yuboring yoki 'Tayyorlang' tugmasini bosing.",
-                reply_markup=get_action_keyboard(show_finish=True)
+                f"📥 PDF dan {len(images)} ta sahifa qo‘shildi (Jami testlar: {len(tlist)} ta).\n\n"
+                f"• Yana testlar bo‘lsa, yuboravering;\n"
+                f"• Hisobotni chiqarish uchun pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing!",
+                reply_markup=ikb,
+                parse_mode="Markdown"
             )
         except Exception as e:
             logger.error(f"Mode 4 Test PDF error: {e}")
@@ -1487,7 +1647,8 @@ async def mode4_photo(message: types.Message, state: FSMContext):
     await state.update_data(test_paths=tlist)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(tlist)} ta o‘quvchi)", callback_data="m4_finish_now")]
+        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(tlist)} ta o‘quvchi)", callback_data="m4_finish_now")],
+        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m4_single_image_process")]
     ])
     await message.answer(
         f"📥 **{len(tlist)}-o‘quvchi test varaqasi qabul qilindi!**\n\n"
@@ -1500,9 +1661,11 @@ async def mode4_photo(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "m4_single_image_process")
 async def cb_m4_single(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    kpath = data.get("keys_path", "")
-    if kpath:
-        await state.update_data(test_paths=[kpath])
+    tlist = data.get("test_paths", [])
+    if not tlist:
+        kpath = data.get("keys_path", "")
+        if kpath:
+            await state.update_data(test_paths=[kpath])
     await callback.answer("⏳ Tekshirish boshlanmoqda...")
     await mode4_finish(callback.message, state, user_id=callback.from_user.id, username=callback.from_user.username)
 
@@ -1518,6 +1681,8 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
     actual_username = username or (message.from_user.username if message.from_user and message.from_user.username else str(actual_user_id))
 
     data = await state.get_data()
+    cpath = data.get("criteria_path", "")
+    ctext = data.get("criteria_text", "")
     kpath = data.get("keys_path", "")
     ktext = data.get("keys_text", "")
     tlist = data.get("test_paths", [])
@@ -1526,10 +1691,13 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
         await message.answer("Iltimos, avval kamida bitta o‘quvchi test javobi rasmini yuboring.")
         return
 
-    is_text = bool(ktext)
-    keys_input = ktext if is_text else kpath
+    is_text_key = bool(ktext)
+    keys_input = ktext if is_text_key else kpath
 
-    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**\n\nAI {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti bilan solishtirmoqda (taxminan 15–25 soniya)...")
+    is_text_crit = bool(ctext)
+    crit_input = ctext if is_text_crit else cpath
+
+    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**\n\nAI {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti va mezoni bilan solishtirmoqda (taxminan 15–25 soniya)...")
 
     async def update_progress(text):
         try:
@@ -1558,7 +1726,9 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
             keys_input, tlist,
             progress_callback=update_progress,
             batch_callback=send_batch_test_results,
-            is_text_key=is_text
+            is_text_key=is_text_key,
+            criteria_input=crit_input,
+            is_text_criteria=is_text_crit
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_report.xlsx"
