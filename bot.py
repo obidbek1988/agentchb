@@ -44,7 +44,7 @@ FEEDBACK_NOTE = (
     "📩 _Xato va takliflar uchun admin Telegrami:_ @obidbek1888"
 )
 
-def get_main_keyboard():
+def get_main_keyboard(is_admin: bool = False):
     kb = [
         [
             KeyboardButton(text="1️⃣ BSB (Ballar orqali)"),
@@ -59,6 +59,8 @@ def get_main_keyboard():
             KeyboardButton(text="ℹ️ Narxlar va Yordam")
         ]
     ]
+    if is_admin:
+        kb.append([KeyboardButton(text="📊 Baza va Statistika (Admin)")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 # ==================== TO'LOV VA BALANS TIZIMI ====================
@@ -546,7 +548,8 @@ async def start_cmd(message: types.Message, state: FSMContext):
         "3️⃣ **CHSB (Ballar orqali):** eMaktab CHSB jurnali va mezoni bo‘yicha (B-Q-M) hisobot qilish.\n"
         "4️⃣ **CHSB (Testlarni tekshirish):** Test to‘g‘ri kaliti va o‘quvchi javoblari varaqasini tekshirib hisobot qilish."
     )
-    await message.answer(welcome_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    is_admin = (message.from_user.id == ADMIN_ID)
+    await message.answer(welcome_text, reply_markup=get_main_keyboard(is_admin=is_admin), parse_mode="Markdown")
 
 async def send_to_archive(doc_path: str, caption: str):
     global CURRENT_ARCHIVE_ID
@@ -1385,6 +1388,7 @@ async def mode4_finish(message: types.Message, state: FSMContext):
 # ==================== ADMIN UCHUN MAXSUS BUYRUQLAR ====================
 @dp.message(Command("admin"))
 @dp.message(Command("baza"))
+@dp.message(F.text.contains("Baza va Statistika"))
 @dp.message(F.text.lower().in_(["/admin", "/baza", "baza"]))
 async def admin_dashboard_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
