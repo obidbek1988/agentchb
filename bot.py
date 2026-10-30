@@ -1274,11 +1274,10 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
         db_service.consume_credit(actual_user_id, credit_type, admin_id=ADMIN_ID)
+        await state.clear()
     except Exception as e:
         logger.error(f"Mode 2 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
-    finally:
-        await state.clear()
 
 # ==================== 3-REJIM: CHSB BALLAR ORQALI ====================
 @dp.message(F.text.contains("3️⃣ CHSB (Ballar orqali)"))
@@ -1741,11 +1740,10 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
         db_service.consume_credit(actual_user_id, credit_type, admin_id=ADMIN_ID)
+        await state.clear()
     except Exception as e:
         logger.error(f"Mode 4 Error: {e}", exc_info=True)
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
-    finally:
-        await state.clear()
 
 # ==================== ADMIN UCHUN MAXSUS BUYRUQLAR ====================
 @dp.message(Command("admin"))
