@@ -1121,8 +1121,28 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         except:
             pass
 
+    async def send_batch_works_results(batch_students, current_count, total_count):
+        if not batch_students:
+            return
+        lines = [f"📋 **Tekshirildi ({current_count}/{total_count}-o‘quvchilar):**"]
+        for st in batch_students:
+            tr = st.get("tr", "")
+            name = st.get("name", "O‘quvchi")
+            score = st.get("total_score", 0)
+            note = st.get("note", "Tekshirildi")
+            lines.append(f"{tr}. 👤 **{name}** — **{score} ball**\n   📝 _Tahlil: {note}_")
+        txt = "\n\n".join(lines)
+        try:
+            await message.answer(txt, parse_mode="Markdown")
+        except Exception:
+            await message.answer(txt)
+
     try:
-        parsed = await ai_service.evaluate_student_works(cpath, wlist, progress_callback=update_progress)
+        parsed = await ai_service.evaluate_student_works(
+            cpath, wlist,
+            progress_callback=update_progress,
+            batch_callback=send_batch_works_results
+        )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_bsb_evaluated.xlsx"
         build_bsb_excel(parsed, out_excel)
@@ -1434,8 +1454,28 @@ async def mode4_finish(message: types.Message, state: FSMContext):
         except:
             pass
 
+    async def send_batch_test_results(batch_students, current_count, total_count):
+        if not batch_students:
+            return
+        lines = [f"📋 **Tekshirildi ({current_count}/{total_count}-o‘quvchilar testlari):**"]
+        for st in batch_students:
+            tr = st.get("tr", "")
+            name = st.get("name", "O‘quvchi")
+            score = st.get("total_score", 0)
+            note = st.get("note", "Tekshirildi")
+            lines.append(f"{tr}. 👤 **{name}** — **{score}/40 ball**\n   📝 _Tahlil: {note}_")
+        txt = "\n\n".join(lines)
+        try:
+            await message.answer(txt, parse_mode="Markdown")
+        except Exception:
+            await message.answer(txt)
+
     try:
-        parsed = await ai_service.evaluate_test_answers(kpath, tlist, progress_callback=update_progress)
+        parsed = await ai_service.evaluate_test_answers(
+            kpath, tlist,
+            progress_callback=update_progress,
+            batch_callback=send_batch_test_results
+        )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{message.from_user.id}_{cname}_chsb_test_report.xlsx"
         build_chsb_excel(parsed, out_excel)

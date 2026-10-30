@@ -162,7 +162,7 @@ Javob FAQAT sof JSON bo'lsin.
         return res
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
-    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None) -> Dict[str, Any]:
         batch_size = 4
         all_students = []
         final_info = {}
@@ -182,7 +182,14 @@ Javob FAQAT sof JSON bo'lsin.
             if not criteria_list and "criteria" in res:
                 criteria_list = res["criteria"]
 
-            all_students.extend(res.get("students", []))
+            new_students = res.get("students", [])
+            all_students.extend(new_students)
+            if batch_callback and new_students:
+                try:
+                    await batch_callback(new_students, current_count, total_works)
+                except Exception as be:
+                    logger.warning(f"Batch callback error: {be}")
+
             # Safe interval between batches
             await asyncio.sleep(1.0)
 
@@ -282,7 +289,7 @@ Javob FAQAT sof JSON bo'lsin.
         return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
 
     # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
-    async def evaluate_test_answers(self, keys_img_path: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+    async def evaluate_test_answers(self, keys_img_path: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None) -> Dict[str, Any]:
         batch_size = 4
         all_students = []
         final_info = {}
@@ -299,7 +306,14 @@ Javob FAQAT sof JSON bo'lsin.
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
 
-            all_students.extend(res.get("students", []))
+            new_students = res.get("students", [])
+            all_students.extend(new_students)
+            if batch_callback and new_students:
+                try:
+                    await batch_callback(new_students, current_count, total_tests)
+                except Exception as be:
+                    logger.warning(f"Batch test callback error: {be}")
+
             await asyncio.sleep(1.0)
 
         return {
