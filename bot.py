@@ -1,4 +1,8 @@
 import os
+import certifi
+os.environ["SSL_CERT_FILE"] = certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+
 import asyncio
 import logging
 from aiohttp import web
@@ -134,8 +138,9 @@ async def handle_forward(message: types.Message):
             parse_mode="Markdown"
         )
 
+@dp.message(Command("start", ignore_case=True))
 @dp.message(CommandStart())
-@dp.message(F.text == "❌ Bekor qilish")
+@dp.message(F.text.lower().in_(["/start", "start", "❌ bekor qilish", "bekor qilish"]))
 async def start_cmd(message: types.Message, state: FSMContext):
     await state.clear()
     welcome_text = (
@@ -158,7 +163,7 @@ async def send_to_archive(doc_path: str, caption: str):
             logger.warning(f"Arxiv kanalga jo'natilmadi: {e}")
 
 # ==================== 1-REJIM: BSB BALLAR ORQALI ====================
-@dp.message(F.text == "1️⃣ BSB (Ballar orqali)")
+@dp.message(F.text.contains("BSB (Ballar orqali)"))
 async def mode1_start(message: types.Message, state: FSMContext):
     await state.clear()
     msg = (
@@ -429,7 +434,7 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 2-REJIM: BSB ISHLARNI TEKSHIRISH ====================
-@dp.message(F.text == "2️⃣ BSB (Ishlarni tekshirish)")
+@dp.message(F.text.contains("BSB (Ishlarni tekshirish)"))
 async def mode2_start(message: types.Message, state: FSMContext):
     await state.clear()
     await state.set_state(BotStates.m2_criteria)
@@ -503,7 +508,7 @@ async def mode2_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 3-REJIM: CHSB BALLAR ORQALI ====================
-@dp.message(F.text == "3️⃣ CHSB (Ballar orqali)")
+@dp.message(F.text.contains("CHSB (Ballar orqali)"))
 async def mode3_start(message: types.Message, state: FSMContext):
     await state.clear()
     await state.set_state(BotStates.m3_journal)
@@ -562,7 +567,7 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 4-REJIM: CHSB TESTLARNI TEKSHIRISH ====================
-@dp.message(F.text == "4️⃣ CHSB (Testlarni tekshirish)")
+@dp.message(F.text.contains("CHSB (Testlarni tekshirish)"))
 async def mode4_start(message: types.Message, state: FSMContext):
     await state.clear()
     await state.set_state(BotStates.m4_keys)
