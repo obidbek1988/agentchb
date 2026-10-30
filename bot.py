@@ -514,9 +514,52 @@ async def mode3_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m3_journal)
     await message.answer(
         "📊 **3-REJIM: CHSB (Ballar orqali hisobot)**\n\n"
-        "1-qadam: **eMaktab jurnali skrinshotini** (CHSB 40 ballik ustuni bilan) yuboring:",
-        reply_markup=get_action_keyboard()
+        "1-qadam: eMaktab elektron jurnali **Excel (.xlsx/.xls) faylini** yoki **skrinshotini** (CHSB 40 ballik ustuni bilan) yuboring:\n"
+        "*(Excel fayl bo‘lsa 100% xatosiz va darhol tayyor bo‘ladi!)*",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m3_journal, F.document)
+async def mode3_journal_document(message: types.Message, state: FSMContext):
+    fname = (message.document.file_name or "").lower()
+    if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
+        await message.answer("Iltimos, eMaktab elektron jurnalini .xlsx yoki .xls formatda yuboring.")
+        return
+
+    status_msg = await message.answer(f"⏳ CHSB elektron jurnali ({fname}) to‘g‘ridan-to‘g‘ri o‘qilmoqda...")
+    os.makedirs("temp", exist_ok=True)
+    ext = ".xls" if fname.endswith(".xls") else ".xlsx"
+    fpath = f"temp/m3_doc_{message.from_user.id}_{message.message_id}{ext}"
+    await bot.download(message.document, destination=fpath)
+
+    try:
+        from emaktab_parser import distribute_chsb_40
+        parsed = parse_emaktab_file(fpath)
+        # Update students task_scores with CHSB B, Q, M (6, 24, 10)
+        for st in parsed.get("students", []):
+            st["task_scores"] = distribute_chsb_40(st.get("total_score"))
+
+        cname = parsed.get("school_info", {}).get("class_name", "sinf")
+        out_excel = f"temp/{message.from_user.id}_{cname}_chsb.xlsx"
+        build_chsb_excel(parsed, out_excel)
+
+        doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_hisobot.xlsx")
+        cap = (
+            f"🎉 **{cname} sinf CHSB hisoboti tayyor!**\n"
+            f"• Manba: eMaktab elektron jurnali ({fname})\n"
+            f"• A4 Portret format\n"
+            f"• (B) Bilish (6 ball), (Q) Qo‘llash (24 ball), (M) Mulohaza (10 ball) taqsimlandi."
+            f"{FEEDBACK_NOTE}"
+        )
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Yangi CHSB (Excel): {cname} | @{message.from_user.username or message.from_user.id}")
+        await status_msg.delete()
+    except Exception as e:
+        logger.error(f"Mode 3 Excel Error: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
+    finally:
+        await state.clear()
 
 @dp.message(BotStates.m3_journal, F.photo)
 async def mode3_journal(message: types.Message, state: FSMContext):

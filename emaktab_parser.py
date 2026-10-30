@@ -56,6 +56,32 @@ def distribute_score_to_tasks(total_score: Optional[int], criteria: List[Dict[st
         
     return scores
 
+def distribute_chsb_40(total_score: Optional[int]) -> List[Optional[float]]:
+    """
+    CHSB 40 ball:
+    (B) Bilish max 6 ball
+    (Q) Qo'llash max 24 ball
+    (M) Mulohaza max 10 ball
+    """
+    if total_score is None or total_score <= 0:
+        return [None, None, None]
+    
+    tot = min(total_score, 40)
+    
+    # Proportionate distribution
+    b = round((6.0 / 40.0) * tot)
+    q = round((24.0 / 40.0) * tot, 1)
+    m = round(tot - b - q, 1)
+    
+    if m < 0:
+        q = round(q + m, 1)
+        m = 0
+    if q < 0:
+        b = round(b + q)
+        q = 0
+        
+    return [b, q, m]
+
 def parse_emaktab_file(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     ext = os.path.splitext(file_path)[1].lower()
     if ext == ".xls":
