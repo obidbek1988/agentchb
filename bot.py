@@ -63,6 +63,22 @@ def get_main_keyboard(is_admin: bool = False):
         kb.append([KeyboardButton(text="📊 Baza va Statistika (Admin)")])
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
+class BotStates(StatesGroup):
+    m1_journal_fixed = State()
+    m1_journal = State()
+    m1_criteria = State()
+
+    m2_criteria = State()
+    m2_works = State()
+
+    m3_journal = State()
+    m3_criteria = State()
+
+    m4_keys = State()
+    m4_student_tests = State()
+
+    waiting_for_receipt = State()
+
 # ==================== TO'LOV VA BALANS TIZIMI ====================
 @dp.message(F.text.contains("Hisobim / To‘lov qilish"))
 @dp.message(F.text.contains("Hisobim"))
