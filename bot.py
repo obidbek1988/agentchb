@@ -1448,33 +1448,39 @@ async def export_db_to_excel(callback: CallbackQuery):
         await callback.answer("Faqat admin uchun!", show_alert=True)
         return
 
-    import sqlite3, openpyxl
-    conn = sqlite3.connect("bot_database.db")
-    cursor = conn.cursor()
+    await callback.answer("⏳ Excel tayyorlanmoqda...", show_alert=False)
 
-    wb = openpyxl.Workbook()
-    ws_u = wb.active
-    ws_u.title = "Foydalanuvchilar"
+    try:
+        import sqlite3, openpyxl
+        os.makedirs("temp", exist_ok=True)
+        conn = sqlite3.connect("bot_database.db")
+        cursor = conn.cursor()
 
-    ws_u.append(["Telegram ID", "Username", "F.I.O", "Bepul sinov", "Mavjud balans (sinflar)", "Jami hisobotlar", "Ro‘yxatdan o‘tgan sana"])
-    cursor.execute("SELECT user_id, username, full_name, free_trial_used, balance_classes, total_generated, created_at FROM users;")
-    for row in cursor.fetchall():
-        ws_u.append(list(row))
+        wb = openpyxl.Workbook()
+        ws_u = wb.active
+        ws_u.title = "Foydalanuvchilar"
 
-    ws_t = wb.create_sheet(title="To‘lovlar Tarixi")
-    ws_t.append(["Tranzaksiya ID", "User ID", "Sinflar soni", "Holat", "Sana"])
-    cursor.execute("SELECT id, user_id, amount_classes, status, created_at FROM transactions;")
-    for row in cursor.fetchall():
-        ws_t.append(list(row))
+        ws_u.append(["Telegram ID", "Username", "F.I.O", "Bepul sinov", "Mavjud balans (sinflar)", "Jami hisobotlar", "Ro‘yxatdan o‘tgan sana"])
+        cursor.execute("SELECT user_id, username, full_name, free_trial_used, balance_classes, total_generated, created_at FROM users;")
+        for row in cursor.fetchall():
+            ws_u.append(list(row))
 
-    conn.close()
+        ws_t = wb.create_sheet(title="To‘lovlar Tarixi")
+        ws_t.append(["Tranzaksiya ID", "User ID", "Sinflar soni", "Holat", "Sana"])
+        cursor.execute("SELECT id, user_id, amount_classes, status, created_at FROM transactions;")
+        for row in cursor.fetchall():
+            ws_t.append(list(row))
 
-    export_path = "temp/Bot_Baza_Hisoboti.xlsx"
-    wb.save(export_path)
+        conn.close()
 
-    doc = FSInputFile(export_path, filename="Bot_Foydalanuvchilar_va_To‘lovlar_Bazasi.xlsx")
-    await callback.message.answer_document(doc, caption="📊 **Barcha hisob-kitoblar va o‘qituvchilar bazasi (Excel shaklida):**", parse_mode="Markdown")
-    await callback.answer()
+        export_path = "temp/Bot_Baza_Hisoboti.xlsx"
+        wb.save(export_path)
+
+        doc = FSInputFile(export_path, filename="Bot_Foydalanuvchilar_va_To‘lovlar_Bazasi.xlsx")
+        await callback.message.answer_document(doc, caption="📊 **Barcha hisob-kitoblar va o‘qituvchilar bazasi (Excel shaklida):**", parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Export Excel Error: {e}", exc_info=True)
+        await callback.message.answer(f"❌ Xatolik yuz berdi: {str(e)}")
 
 async def handle_ping(request):
     return web.Response(text="BSB & CHSB Hisobot Agent Telegram Bot is running 24/7!")
