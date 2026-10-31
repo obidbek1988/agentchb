@@ -733,7 +733,7 @@ Har bir o'quvchining belgilagan javoblarini to'g'ri kalit va baholash mezoni bil
 Quyidagi JSON formatida qaytaring:
 {{
   "school_info": {{
-    "class_name": "6-G",
+    "class_name": "9-B",
     "subject": "Informatika",
     "quarter": 2,
     "chsb_number": 2,
