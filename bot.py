@@ -20,7 +20,7 @@ from config import BOT_TOKEN, ARCHIVE_CHANNEL_ID
 from ai_service import ai_service
 from queue_manager import queue_manager
 from excel_service import build_bsb_excel, build_chsb_excel
-from criteria_store import get_criteria_for_grade, format_criteria_preview
+from criteria_store import get_criteria_for_grade, format_criteria_preview, get_chsb_for_grade, INFORMATIKA_1_CHORAK_CHSB
 from emaktab_parser import parse_emaktab_file
 from pdf_utils import pdf_to_images
 import db_service
@@ -122,8 +122,11 @@ class BotStates(StatesGroup):
     m3_journal = State()
     m3_criteria = State()
 
+    m4_select_grade_or_custom = State()
     m4_criteria = State()
+    m4_edit_criteria_input = State()
     m4_keys = State()
+    m4_edit_keys_input = State()
     m4_student_tests = State()
 
     m5_criteria = State()
@@ -1556,6 +1559,7 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 4-REJIM: CHSB TESTLARNI TEKSHIRISH ====================
+
 @dp.message(F.text.contains("CHSB (Testlarni tekshirish)"))
 @dp.message(F.text.contains("Testlarni tekshirish"))
 async def mode4_start(message: types.Message, state: FSMContext):
@@ -1565,139 +1569,302 @@ async def mode4_start(message: types.Message, state: FSMContext):
 
     await state.clear()
     await state.update_data(credit_type=credit_type, test_paths=[])
-    await state.set_state(BotStates.m4_criteria)
+    await state.set_state(BotStates.m4_select_grade_or_custom)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Standart mezon (6, 24, 10 ball)", callback_data="m4_std_criteria")]
+        [InlineKeyboardButton(text="💻 9-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_9")],
+        [InlineKeyboardButton(text="🔄 Boshqa sinf / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
     ])
     msg_text = (
-        "🎯 **4-REJIM: CHSB Testlarni tekshirish va hisobot tuzish**\n\n"
-        "📍 **1-QADAM (3 tadan): CHSB Baholash mezonini yuboring**\n"
-        "*(Rasm, PDF yoki pastdagi standart tugma orqali)*\n\n"
-        "📋 **MEZON UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
-        "Respublika standart 40 ballik CHSB mezonida (jami 15 ta test):\n"
-        "• **(B) Bilish:** 1–5 savollar (jami: **6 ball**)\n"
-        "• **(Q) Qo‘llash:** 6–12 savollar (jami: **24 ball**)\n"
-        "• **(M) Mulohaza:** 13–15 savollar (jami: **10 ball**)\n"
-        "Jami: **15 ta test — 40 ball**\n\n"
-        "💡 _Agar sizda maxsus mezon bo‘lsa, rasmini/PDF yuboring. Standart 40 ballik mezon uchun esa pastdagi tugmani bosing:_"
+        "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
+        "Fan: **Informatika va axborot texnologiyalari (O‘zbek sinf)**\n\n"
+        "🏛 Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazining **9-sinf original test varianti va mezoni** tizimda tayyor mavjud!\n\n"
+        "Quyidagilardan birini tanlang:"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data == "m4_std_criteria")
-async def cb_m4_std_criteria(callback: CallbackQuery, state: FSMContext):
-    std_criteria_desc = "Standart CHSB 40 ballik (jami 15 ta test): (B) Bilish 1-5 (6 ball), (Q) Qo'llash 6-12 (24 ball), (M) Mulohaza 13-15 (10 ball). Jami 40 ball."
-    await state.update_data(criteria_text=std_criteria_desc, criteria_path="")
-    await callback.answer("Standart mezon tanlandi!")
-    await state.set_state(BotStates.m4_keys)
-    await ask_m4_keys(callback.message)
+@dp.callback_query(F.data == "chsb_pick_9")
+async def cb_chsb_pick_9(callback: CallbackQuery, state: FSMContext):
+    chsb_info = get_chsb_for_grade("9")
+    if not chsb_info:
+        await callback.answer("Ma'lumot topilmadi.")
+        return
 
-@dp.message(BotStates.m4_criteria, F.document)
-async def mode4_criteria_doc(message: types.Message, state: FSMContext):
-    fname = (message.document.file_name or "").lower()
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m4_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        try:
-            status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, o‘qilmoqda...")
-            images = pdf_to_images(pdf_path)
-            cpath = images[0] if images else pdf_path
-            await state.update_data(criteria_path=cpath, criteria_text="")
-            await status_pdf.delete()
-            await state.set_state(BotStates.m4_keys)
-            await ask_m4_keys(message)
-        except Exception as e:
-            logger.error(f"Mode 4 Criteria PDF error: {e}")
-            await message.answer("❌ PDF mezonni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
+    crit_summary = (
+        f"📋 **MEZON VA BALLAR TAQSIMOTI ({chsb_info['max_score']} ball):**\n"
+        f"{chsb_info['distribution_summary']}\n\n"
+        f"🔢 **1 dan 15 gacha savollar bo‘yicha taqsimot:**\n"
+        f"`{chsb_info['bqm_compact']}`"
+    )
+    await state.update_data(
+        grade="9",
+        criteria_text=crit_summary,
+        criteria_path="",
+        keys_text=chsb_info["keys"],
+        keys_path="",
+        pdf_path=chsb_info.get("pdf_path", "")
+    )
+
+    card_text = (
+        f"📚 **{chsb_info['title']} (O‘zbek sinf)**\n"
+        f"🏛 _{chsb_info['agency']}_\n"
+        f"📋 **1-CHORAK 1-CHSB (ORIGINAL TEST VARIANTI)**\n"
+        f"Jami: **{chsb_info['total_questions']} ta test — {chsb_info['max_score']} ball**\n\n"
+        f"{crit_summary}\n\n"
+        f"Pastdagi tugmalar orqali test varaqasini ko‘rishingiz yoki mezonni tasdiqlashingiz mumkin:"
+    )
+
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
+        [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
+        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")]
+    ])
+    await callback.answer()
+    await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_show_test_pdf")
+async def cb_m4_show_test_pdf(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    pdf_path = data.get("pdf_path", "") or "assets/9_sinf_informatika_chsb1_original.pdf"
+    if os.path.exists(pdf_path):
+        doc = FSInputFile(pdf_path, filename="9_sinf_Informatika_1_CHSB_Original_Test.pdf")
+        await callback.message.answer_document(
+            doc,
+            caption="📄 **9-sinf Informatika 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**\n\nUshbu test varianti asosida baholash mezoni va to‘g‘ri javoblar kaliti tuzilgan.",
+            parse_mode="Markdown"
+        )
+        await callback.answer("PDF yuborildi.")
     else:
-        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
+        await callback.answer("Fayl topilmadi.", show_alert=True)
+
+@dp.callback_query(F.data == "m4_edit_criteria")
+async def cb_m4_edit_criteria(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m4_edit_criteria_input)
+    await callback.answer()
+    msg = (
+        "✏️ **CHSB BAHOLASH MEZONINI TAHRIRLASH:**\n\n"
+        "1 dan 15 gacha qaysi savollar (B) Bilish, (Q) Qo‘llash yoki (M) Mulohaza ekanligini yozib yuboring.\n\n"
+        "Masalan:\n"
+        "`1-B, 2-Q, 3-Q, 4-B, 5-Q, 6-Q, 7-B, 8-Q, 9-Q, 10-Q, 11-Q, 12-Q, 13-M, 14-Q, 15-M`\n\n"
+        "*(Bekor qilish uchun: '❌ Bekor qilish')*"
+    )
+    await callback.message.answer(msg, parse_mode="Markdown")
+
+@dp.message(BotStates.m4_edit_criteria_input, F.text)
+async def mode4_edit_criteria_handler(message: types.Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+        await state.set_state(BotStates.m4_select_grade_or_custom)
+        await message.answer("Tahrirlash bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    updated_crit = f"Foydalanuvchi tomonidan kiritilgan CHSB mezoni:\n{text}\n(Jami 15 ta test = 40 ball)"
+    await state.update_data(criteria_text=updated_crit, criteria_path="")
+
+    msg = (
+        f"✅ **Yangi mezon saqlandi:**\n\n"
+        f"`{text}`\n\n"
+        f"Mezonni tasdiqlab, keyingi bosqichga o‘tasizmi?"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Qayta tahrirlash", callback_data="m4_edit_criteria")]
+    ])
+    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "chsb_pick_custom")
+async def cb_chsb_pick_custom(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m4_criteria)
+    await callback.answer()
+    msg = (
+        "📋 **O‘Z MEZONINGIZNI YUKLASH (Boshqa sinf yoki fan uchun):**\n\n"
+        "Iltimos, CHSB baholash mezonini yoki namunaviy test varaqasini yuboring:\n"
+        "*(Rasm, PDF yoki matn ko‘rinishida)*\n\n"
+        "💡 _AI mezonni o‘qib, 1 dan 15 gacha (B), (Q), (M) taqsimotini aniqlab beradi va uni tahrirlashingiz mumkin bo‘ladi._"
+    )
+    await callback.message.answer(msg, reply_markup=ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
+        resize_keyboard=True
+    ), parse_mode="Markdown")
 
 @dp.message(BotStates.m4_criteria, F.photo)
-async def mode4_criteria_photo(message: types.Message, state: FSMContext):
+async def mode4_custom_criteria_photo(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     cpath = f"temp/m4_c_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=cpath)
-    await state.update_data(criteria_path=cpath, criteria_text="")
 
-    await state.set_state(BotStates.m4_keys)
-    await ask_m4_keys(message)
+    status_msg = await message.answer("⏳ Mezon fotosurati tahlil qilinmoqda...")
+    try:
+        prompt = (
+            "Ushbu CHSB mezon rasmini tahlil qiling. 1 dan 15 gacha bo'lgan test savollarining qaysi biri "
+            "(B) Bilish, qaysi biri (Q) Qo'llash va qaysi biri (M) Mulohaza ekanligini aniqlang. "
+            "Qisqa matn ko'rinishida quyidagicha qaytaring: "
+            "1-B, 2-Q, 3-Q, 4-B... va ballar taqsimotini ko'rsating. Boshqa ortiqcha gap yozmang."
+        )
+        parsed_crit = ai_service._send_prompt_to_gemini(prompt, [cpath])
+        crit_str = str(parsed_crit).strip()
+    except Exception as e:
+        logger.error(f"Custom criteria AI error: {e}")
+        crit_str = "1-B, 2-Q, 3-Q, 4-B, 5-Q, 6-Q, 7-B, 8-Q, 9-Q, 10-Q, 11-Q, 12-Q, 13-M, 14-Q, 15-M (40 ball)"
 
-@dp.message(BotStates.m4_criteria, F.text)
-async def mode4_criteria_text(message: types.Message, state: FSMContext):
-    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
-        await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
-        return
+    await status_msg.delete()
+    await state.update_data(criteria_path=cpath, criteria_text=crit_str)
 
-    await state.update_data(criteria_text=message.text.strip(), criteria_path="")
-    await state.set_state(BotStates.m4_keys)
-    await ask_m4_keys(message)
-
-async def ask_m4_keys(message: types.Message):
-    msg_text = (
-        "✅ **CHSB Baholash mezoni qabul qilindi!**\n\n"
-        "📍 **2-QADAM (3 tadan): Testning to‘g‘ri javoblar KALITINI yuboring**\n"
-        "*(Matn ko‘rinishida yoki rasm/PDF formatida)*\n\n"
-        "🔑 **KALIT UCHUN NAMUNA (Qanday yuborish kerak?):**\n"
-        "1️⃣ **Matn ko‘rinishida** botga yozib yuborishingiz mumkin:\n"
-        "`1-A, 2-B, 3-C, 4-D, 5-A, 6-B, 7-C, 8-D, 9-A, 10-B, 11-C, 12-D, 13-A, 14-B, 15-C`\n\n"
-        "2️⃣ **Yoki to‘g‘ri javoblar jadvali / kalit tushirilgan kitobcha fotosuratini** yuboring!\n\n"
-        "📸 _Iltimos, to‘g‘ri javoblar kalitini yozing yoki rasmini yuboring:_"
+    msg = (
+        f"📋 **ANIQLANGAN BAHOLASH MEZONI:**\n\n"
+        f"{crit_str}\n\n"
+        f"Mezon to‘g‘rimi? Tasdiqlaysizmi yoki tahrirlaysizmi?"
     )
-    await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
+    ])
+    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.message(BotStates.m4_keys, F.text)
-async def mode4_keys_text(message: types.Message, state: FSMContext):
-    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
-        await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
-        return
-
-    await state.update_data(keys_text=message.text.strip(), keys_path="")
-    await state.set_state(BotStates.m4_student_tests)
-    await ask_m4_student_tests(message)
-
-@dp.message(BotStates.m4_keys, F.document)
-async def mode4_keys_doc(message: types.Message, state: FSMContext):
+@dp.message(BotStates.m4_criteria, F.document)
+async def mode4_custom_criteria_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
     if fname.endswith(".pdf"):
         os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m4_k_pdf_{message.from_user.id}_{message.message_id}.pdf"
+        pdf_path = f"temp/m4_c_{message.from_user.id}_{message.message_id}.pdf"
         await bot.download(message.document, destination=pdf_path)
-        try:
-            status_pdf = await message.answer("📄 Kalit PDF qabul qilindi, o‘qilmoqda...")
-            images = pdf_to_images(pdf_path)
-            kpath = images[0] if images else pdf_path
-            await state.update_data(keys_path=kpath, keys_text="")
-            await status_pdf.delete()
-            await state.set_state(BotStates.m4_student_tests)
-            await ask_m4_student_tests(message)
-        except Exception as e:
-            logger.error(f"Mode 4 Keys PDF error: {e}")
-            await message.answer("❌ PDF kalitni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
-    else:
-        await message.answer("Iltimos, test kalitini rasm yoki matn ko‘rinishida yuboring.")
+        images = pdf_to_images(pdf_path)
+        cpath = images[0] if images else pdf_path
 
-@dp.message(BotStates.m4_keys, F.photo)
-async def mode4_keys(message: types.Message, state: FSMContext):
+        status_msg = await message.answer("⏳ PDF mezon tahlil qilinmoqda...")
+        try:
+            prompt = (
+                "Ushbu CHSB mezon faylini tahlil qiling. 1 dan 15 gacha bo'lgan test savollarining qaysi biri "
+                "(B) Bilish, qaysi biri (Q) Qo'llash va qaysi biri (M) Mulohaza ekanligini aniqlang. "
+                "Qisqa matn ko'rinishida: 1-B, 2-Q, 3-Q... shaklida qaytaring."
+            )
+            parsed_crit = ai_service._send_prompt_to_gemini(prompt, [cpath])
+            crit_str = str(parsed_crit).strip()
+        except Exception:
+            crit_str = "1-B, 2-Q, 3-Q, 4-B, 5-Q, 6-Q, 7-B, 8-Q, 9-Q, 10-Q, 11-Q, 12-Q, 13-M, 14-Q, 15-M (40 ball)"
+
+        await status_msg.delete()
+        await state.update_data(criteria_path=cpath, criteria_text=crit_str)
+
+        msg = (
+            f"📋 **PDF DAN ANIQLANGAN MEZON:**\n\n"
+            f"{crit_str}\n\n"
+            f"Mezon to‘g‘rimi? Tasdiqlaysizmi yoki tahrirlaysizmi?"
+        )
+        ikb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+            [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
+        ])
+        await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+    else:
+        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
+
+@dp.message(BotStates.m4_criteria, F.text)
+async def mode4_custom_criteria_text(message: types.Message, state: FSMContext):
+    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    crit_str = message.text.strip()
+    await state.update_data(criteria_text=crit_str, criteria_path="")
+    msg = (
+        f"📋 **QABUL QILINGAN MEZON:**\n\n"
+        f"`{crit_str}`\n\n"
+        f"Mezon to‘g‘rimi? Tasdiqlaysizmi yoki tahrirlaysizmi?"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
+    ])
+    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_confirm_criteria")
+async def cb_m4_confirm_criteria(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    keys_text = data.get("keys_text", "")
+    if not keys_text:
+        keys_text = "1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C"
+        await state.update_data(keys_text=keys_text)
+
+    await callback.answer("Mezon tasdiqlandi!")
+    await show_m4_keys_card(callback.message, keys_text)
+
+async def show_m4_keys_card(message: types.Message, keys_str: str):
+    msg_text = (
+        "✅ **CHSB Baholash mezoni tasdiqlandi!**\n\n"
+        "📍 **2-QADAM (3 tadan): Testning to‘g‘ri javoblar KALITI**\n\n"
+        "🔑 **Hozirgi to‘g‘ri javoblar kaliti:**\n"
+        f"`{keys_str}`\n\n"
+        "Shu kalitni tasdiqlaysizmi yoki o‘zgartirmoqchimisiz?"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu to‘g‘ri kalitni tasdiqlash", callback_data="m4_confirm_key")],
+        [InlineKeyboardButton(text="✏️ Kalitni o‘zgartirish / tahrirlash", callback_data="m4_edit_key")],
+        [InlineKeyboardButton(text="🔑 Boshqa kalit kiritish (Matn/Rasm)", callback_data="m4_custom_key")]
+    ])
+    try:
+        await message.edit_text(msg_text, reply_markup=ikb, parse_mode="Markdown")
+    except Exception:
+        await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data.in_(["m4_edit_key", "m4_custom_key"]))
+async def cb_m4_edit_key(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m4_edit_keys_input)
+    await callback.answer()
+    msg = (
+        "✏️ **TO‘G‘RI JAVOBLAR KALITINI KIRITING:**\n\n"
+        "Kalitni matn ko‘rinishida yozing yoki fotosuratini yuboring:\n\n"
+        "Masalan (matn ko‘rinishida):\n"
+        "`1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C`\n\n"
+        "*(Bekor qilish uchun: '❌ Bekor qilish')*"
+    )
+    await callback.message.answer(msg, parse_mode="Markdown")
+
+@dp.message(BotStates.m4_edit_keys_input, F.text)
+async def mode4_edit_keys_text(message: types.Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+        data = await state.get_data()
+        await show_m4_keys_card(message, data.get("keys_text", ""))
+        return
+
+    await state.update_data(keys_text=text, keys_path="")
+    await show_m4_keys_card(message, text)
+
+@dp.message(BotStates.m4_edit_keys_input, F.photo)
+async def mode4_edit_keys_photo(message: types.Message, state: FSMContext):
     os.makedirs("temp", exist_ok=True)
     kpath = f"temp/m4_k_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=kpath)
     await state.update_data(keys_path=kpath, keys_text="")
 
+    msg = (
+        "📸 **Kalit fotosurati qabul qilindi!**\n\n"
+        "Shu kalit tasviri bo‘yicha tekshirishni tasdiqlaysizmi?"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu rasm kalitni tasdiqlash", callback_data="m4_confirm_key")],
+        [InlineKeyboardButton(text="✏️ Qayta kiritish", callback_data="m4_edit_key")]
+    ])
+    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_confirm_key")
+async def cb_m4_confirm_key(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m4_student_tests)
-    await ask_m4_student_tests(message)
+    await callback.answer("Kalit tasdiqlandi!")
+    await ask_m4_student_tests(callback.message)
 
 async def ask_m4_student_tests(message: types.Message):
     msg_text = (
-        "✅ **To‘g‘ri javoblar kaliti qabul qilindi!**\n\n"
-        "📍 **3-QADAM (3 tadan): Endi o‘quvchilarning test javoblari varaqalari rasmlarini yuboring**\n"
+        "✅ **To‘g‘ri javoblar kaliti tasdiqlandi!**\n\n"
+        "📍 **3-QADAM (3 tadan): O‘quvchilarning test javoblari varaqalari rasmlarini yuboring**\n"
         "*(Ketma-ket 30 tagacha rasm yoki bitta umumiy PDF fayl yuborishingiz mumkin)*\n\n"
-        "📝 **O‘QUVCHI ISHI UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
+        "📝 **O‘QUVCHI ISHI UCHUN ESLATMA:**\n"
         "• O‘quvchi belgilagan test titul varaqasi yoki daftardagi javoblar ro‘yxati;\n"
-        "• Yoki test kitobchasi ustida o‘quvchi ruchka/qalam bilan belgilagan variantlar (A, B, C, D);\n"
-        "• Varaq boshida **o‘quvchining F.I.O.si** (masalan: _Olimov Sardor 6-G_) aniq ko‘rinishi kerak.\n\n"
+        "• Yoki test kitobchasida ruchka/qalam bilan belgilangan variantlar (A, B, C, D);\n"
+        "• Varaq boshida **o‘quvchining F.I.O.si** (masalan: _Olimov Sardor 9-A_) aniq ko‘rinsin.\n\n"
         "📸 _O‘quvchilar test varaqalari rasmlarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
@@ -1826,11 +1993,13 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
             criteria_input=crit_input,
             is_text_criteria=is_text_crit
         )
-        cname = parsed.get("school_info", {}).get("class_name", "sinf")
+        chosen_grade = data.get("grade", "")
+        detected_class = parsed.get("school_info", {}).get("class_name", "")
+        cname = detected_class or (f"{chosen_grade}-sinf" if chosen_grade else "9-sinf")
         out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_hisoboti.xlsx"
         build_chsb_excel(parsed, out_excel)
 
-        doc = FSInputFile(out_excel, filename=f"{cname}_sinf_CHSB_test_hisoboti.xlsx")
+        doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_test_hisoboti.xlsx")
         cap = f"🎉 **{cname} sinf CHSB testlari muvaffaqiyatli tekshirildi va test hisoboti tayyorlandi!**\n• Har bir o‘quvchining to‘g‘ri/noto‘g‘ri javoblari va yakuniy bali hisobotda aks etgan.{FEEDBACK_NOTE}"
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{actual_username}")

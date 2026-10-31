@@ -233,3 +233,37 @@ def format_criteria_preview(grade: str) -> str:
         clean_text = c['skill_text'].replace('\n\nJami:', ' — Jami:').replace('\n', ' ')
         text += f"**{idx}-topshiriq [{c['max_point']} ball]:**\n_{clean_text}_\n\n"
     return text.strip()
+
+# ==================== CHSB MEZONLARI (INFORMATIKA) ====================
+
+INFORMATIKA_1_CHORAK_CHSB: Dict[str, Dict[str, Any]] = {
+    "9": {
+        "title": "9-sinf Informatika va axborot texnologiyalari",
+        "doc_title": "2026-2027-o‘quv yili 9-sinf Informatika 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "9-sinf",
+        "subject": "Informatika",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/9_sinf_informatika_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 4, 7-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 2, 3, 5, 6, 8, 9, 10, 11, 12, 14-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 13, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(Q)  3.(Q)  4.(B)  5.(Q)\n6.(Q)  7.(B)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(M) 14.(Q) 15.(M)",
+        "keys": "1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C",
+        "keys_formatted": (
+            "1-C, 2-A, 3-D, 4-C, 5-C\n"
+            "6-A, 7-C, 8-D, 9-A, 10-B\n"
+            "11-B, 12-D, 13-C, 14-A, 15-C"
+        )
+    }
+}
+
+def get_chsb_for_grade(grade: str) -> Optional[Dict[str, Any]]:
+    digits = "".join([c for c in grade if c.isdigit()])
+    return INFORMATIKA_1_CHORAK_CHSB.get(digits)
