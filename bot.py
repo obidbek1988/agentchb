@@ -1228,31 +1228,69 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
 
 def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[str, Any]]:
     """
-    Parses user-edited BSB criteria lines like:
-    1-topshiriq [10 ball]: Matn...
-    2-topshiriq [15 ball]: Algoritm...
-    Returns list of criteria dicts: [{'task_number': 1, 'skill_text': '...', 'max_point': 10}, ...]
+    Parses user-edited BSB criteria.
+    Supports:
+    1. Numbers only: '10, 10, 10, 20' or '15 15 10 10'
+    2. Detailed lines: '1-topshiriq [10 ball]: Matn...' or '1. Nazariya 10'
     """
+    text = (text or "").strip()
+    from criteria_store import get_criteria_for_grade
+    def_info = get_criteria_for_grade(default_grade)
+    def_criteria = def_info.get("criteria", []) if def_info else []
+
+    if not text:
+        return def_criteria
+
+    # 1. Check if user just entered numbers (e.g. '10, 10, 10, 20' or '15 15 10 10')
+    num_matches = re.findall(r'\b\d+\b', text)
+    cleaned_check = re.sub(r'[\d\s,\-\+/;:]', '', text).strip()
+    if not cleaned_check and num_matches and len(num_matches) >= 2:
+        criteria = []
+        for idx, n_str in enumerate(num_matches, start=1):
+            val = int(n_str)
+            skill = f"{idx}-topshiriq"
+            if idx - 1 < len(def_criteria):
+                orig_skill = def_criteria[idx - 1].get("skill_text", "")
+                if orig_skill:
+                    orig_skill = re.sub(r'\[\d+\s*(?:ball|b)?\]|\(\d+\s*(?:ball|b)?\)', '', orig_skill).strip()
+                    orig_skill = re.sub(r'\n*\s*Jami:\s*\d+\s*ball', '', orig_skill, flags=re.IGNORECASE).strip()
+                    skill = orig_skill
+            criteria.append({
+                "task_number": idx,
+                "skill_text": skill,
+                "max_point": val
+            })
+        return criteria
+
+    # 2. Line by line parsing
     lines = [l.strip() for l in text.splitlines() if l.strip()]
     criteria = []
-    task_num = 1
-    for line in lines:
+    for idx, line in enumerate(lines, start=1):
+        m_pts = re.search(r'\[(\d+)\s*(?:ball|b)?\]|\((\d+)\s*(?:ball|b)?\)|(\d+)\s*(?:ball|b)\b', line, re.IGNORECASE)
         pts = 10
-        m_pts = re.search(r'\[(\d+)\s*(?:ball|b)?\]|(\d+)\s*(?:ball|b)', line, re.IGNORECASE)
         if m_pts:
-            pts = int(m_pts.group(1) or m_pts.group(2))
+            pts = int(m_pts.group(1) or m_pts.group(2) or m_pts.group(3))
+        else:
+            m_end = re.search(r'(\d+)\s*$', line)
+            if m_end:
+                pts = int(m_end.group(1))
+
         clean_text = line
+        clean_text = re.sub(r'\[\d+\s*(?:ball|b)?\]|\(\d+\s*(?:ball|b)?\)', '', clean_text).strip()
+        clean_text = re.sub(r'^[•\-\d\.\)\s]+', '', clean_text).strip()
+        if not clean_text:
+            clean_text = f"{idx}-topshiriq"
+        else:
+            clean_text = f"{idx}-topshiriq: {clean_text}"
+
         criteria.append({
-            "task_number": task_num,
+            "task_number": idx,
             "skill_text": clean_text,
             "max_point": pts
         })
-        task_num += 1
 
     if not criteria:
-        from criteria_store import get_criteria_for_grade
-        def_info = get_criteria_for_grade(default_grade)
-        return def_info.get("criteria", []) if def_info else []
+        return def_criteria
     return criteria
 
 @dp.message(F.text.contains("3️⃣ BSB (Ishlarni tekshirish)"))
@@ -1349,14 +1387,28 @@ async def cb_m2_edit_criteria(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     data = await state.get_data()
     grade = data.get("selected_grade", "9")
-    preview_text = data.get("criteria_text", format_criteria_preview(grade))
+    crit_info = get_criteria_for_grade(grade)
+    c_list = crit_info.get("criteria", []) if crit_info else []
+    sample_lines = []
+    for c in c_list:
+        sample_lines.append(f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}")
+    sample_txt = "\n".join(sample_lines)
+
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="m2_back_to_grades")]
+    ])
     msg = (
-        f"✏️ **{grade}-SINF BSB MEZONI VA BALLARINI TAHRIRLASH:**\n\n"
-        f"Hozirgi mezon:\n`{preview_text}`\n\n"
-        f"Topshiriqlar matnini va ballarini xohlaganingizcha o‘zgartirib, bitta matn xabari qilib yuboring:\n\n"
-        f"*(Bekor qilish uchun: '❌ Bekor qilish')*"
+        f"✏️ **{grade}-SINF BSB MEZON VA BALLARINI TAHRIRLASH**\n\n"
+        "O‘zingizga qulay usulda yuboring:\n\n"
+        "1️⃣ **ENG OSON USUL (faqat ballarni yozish):**\n"
+        "Shunchaki topshiriqlar ballarini vergul bilan yuboring:\n"
+        "`10, 10, 10, 20`\n"
+        "*(Bot ballarni avtomatik topshiriqlarga biriktiradi)*\n\n"
+        "2️⃣ **TO‘LIQ USUL (topshiriq matni va balli bilan):**\n"
+        f"```\n{sample_txt}\n```\n\n"
+        "💡 _Yuqoridagi matnni nusxalab, topshiriq yoki ballarini o‘zgartirib yuborishingiz ham mumkin._"
     )
-    await callback.message.answer(msg, parse_mode="Markdown")
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
 
 @dp.message(BotStates.m2_edit_criteria_input, F.text)
 async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
@@ -1379,6 +1431,11 @@ async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
     parsed_criteria = parse_custom_bsb_criteria(txt, default_grade=grade)
     tot_points = sum(c.get("max_point", 10) for c in parsed_criteria)
 
+    lines = [f"📋 **Yangilangan {grade}-sinf BSB mezoni (Jami: {tot_points} ball):**"]
+    for c in parsed_criteria:
+        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
+    custom_preview = "\n".join(lines)
+
     crit_info = {
         "title": f"{grade}-sinf Informatika 1-BSB",
         "class_name": f"{grade}-sinf",
@@ -1388,7 +1445,7 @@ async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
     }
     await state.update_data(
         fixed_criteria=crit_info,
-        criteria_text=txt
+        criteria_text=custom_preview
     )
     await state.set_state(BotStates.m2_criteria)
     ikb = InlineKeyboardMarkup(inline_keyboard=[
@@ -1397,8 +1454,8 @@ async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
         [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m2_back_to_grades")]
     ])
     msg = (
-        f"✅ **Yangi mezon saqlandi (Jami: {tot_points} ball):**\n\n"
-        f"{txt}\n\n"
+        f"{custom_preview}\n\n"
+        f"✅ **Yangi mezon muvaffaqiyatli saqlandi!**\n"
         f"Tasdiqlaysizmi?"
     )
     await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
@@ -1416,19 +1473,20 @@ async def mode2_criteria_photo_reject(message: types.Message):
 
 async def ask_m2_keys(message: types.Message):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⚡ Kalit mezonda bor (Keyingi qadam)", callback_data="m2_skip_keys")]
+        [InlineKeyboardButton(text="🤖 AI o‘zi javoblarni topib tekshirsin (Kalitsiz)", callback_data="m2_skip_keys")],
+        [InlineKeyboardButton(text="⬅️ Mezonni o‘zgartirish", callback_data="m2_back_to_grades")]
     ])
     msg_text = (
-        "✅ **BSB baholash mezoni qabul qilindi!**\n\n"
-        "📍 **2-QADAM (3 tadan): To‘g‘ri javoblar KALITINI yuboring**\n"
-        "*(Matn, rasm yoki PDF ko‘rinishida)*\n\n"
-        "🔑 **KALIT UCHUN NAMUNA (Qanday yuborish kerak?):**\n"
-        "1️⃣ **Matn ko‘rinishida** botga yozib yuborishingiz mumkin:\n"
-        "• 1-topshiriq javobi: Axborot — bu atrof-muhit haqidagi maʼlumotlar to‘plami...\n"
-        "• 2-topshiriq javobi: Algoritm chiziqli, tarmoqlanuvchi va takrorlanuvchi bo‘ladi.\n"
-        "• 3-topshiriq javobi: Natija: X = 120, Y = 45...\n\n"
-        "2️⃣ **Yoki to‘g‘ri javoblar/yechimlar yozilgan varaq fotosuratini** yuboring!\n\n"
-        "💡 _Agar to‘g‘ri javoblar kaliti mezon varag‘ining o‘zida bo‘lsa, pastdagi **'⚡ Kalit mezonda bor'** tugmasini bosing:_"
+        "✅ **BSB baholash mezoni tasdiqlandi!**\n\n"
+        "📍 **2-QADAM (3 tadan): To‘g‘ri javoblar KALITI (Xohishga ko‘ra)**\n\n"
+        "Quyidagi 2 ta qulay usuldan birini tanlang:\n\n"
+        "🤖 **1-USUL (Eng oson — Kalitsiz tekshirish):**\n"
+        "Pastdagi **[🤖 AI o‘zi javoblarni topib tekshirsin]** tugmasini bosing!\n"
+        "*(Sizdan kalit yozish talab etilmaydi, AI Agent mezon savollari bo‘yicha o‘quvchilar daftarlarini o‘zi tahlil qilib to‘liq tekshirib beradi)*\n\n"
+        "✍️ **2-USUL (O‘zingiz kalit yozish):**\n"
+        "Agar o‘zingizda tayyor qisqa to‘g‘ri javoblar bo‘lsa, shunchaki xabar sifatida yozib yuborishingiz mumkin:\n"
+        "• 1-savol: ...\n"
+        "• 2-savol: ..."
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
@@ -2748,10 +2806,15 @@ async def cb_m5_edit_criteria(callback: CallbackQuery, state: FSMContext):
     sample_txt = "\n".join(sample_lines)
 
     guide_msg = (
-        "✏️ **MEZON VA BALLARNI TAHRIRLASH**\n\n"
-        "Quyidagi matnni nusxalab olib, topshiriqlar nomi yoki ballarini o‘zingizga moslab o‘zgartiring va botga yuboring:\n\n"
+        f"✏️ **{grade}-SINF BSB MEZON VA BALLARINI TAHRIRLASH**\n\n"
+        "O‘zingizga qulay usulda yuboring:\n\n"
+        "1️⃣ **ENG OSON USUL (faqat ballarni yozish):**\n"
+        "Shunchaki topshiriqlar ballarini vergul bilan yuboring:\n"
+        "`10, 10, 10, 20`\n"
+        "*(Bot ballarni avtomatik topshiriqlarga biriktiradi)*\n\n"
+        "2️⃣ **TO‘LIQ USUL (topshiriq matni va balli bilan):**\n"
         f"```\n{sample_txt}\n```\n\n"
-        "💡 _Eslatma: Har bir qator oxirida yoki kvadrat qavs ichida ball ko‘rsatiladi. Masalan: [10 ball]_"
+        "💡 _Yuqoridagi matnni nusxalab, topshiriq yoki ballarini o‘zgartirib yuborishingiz ham mumkin._"
     )
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data=f"m5_grade_{grade}")]
