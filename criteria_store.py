@@ -417,6 +417,122 @@ INFORMATIKA_1_CHORAK_CHSB_RUS: Dict[str, Dict[str, Any]] = {
 }
 
 ADABIYOT_1_CHORAK_CHSB: Dict[str, Dict[str, Any]] = {
+    "5": {
+        "title": "5-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 5-sinf Adabiyot 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "5-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/5_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-D, 2-B, 3-A, 4-C, 5-D, 6-B, 7-C, 8-D, 9-B, 10-A, 11-A, 12-A, 13-C, 14-B, 15-C",
+        "keys_formatted": (
+            "1-D, 2-B, 3-A, 4-C, 5-D\n"
+            "6-B, 7-C, 8-D, 9-B, 10-A\n"
+            "11-A, 12-A, 13-C, 14-B, 15-C"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'D', 2: 'B', 3: 'A', 4: 'C', 5: 'D', 6: 'B', 7: 'C', 8: 'D', 9: 'B', 10: 'A', 11: 'A', 12: 'A', 13: 'C', 14: 'B', 15: 'C'}
+    },
+    "6": {
+        "title": "6-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 6-sinf Adabiyot 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "6-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/6_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-C, 2-B, 3-A, 4-B, 5-B, 6-D, 7-B, 8-C, 9-D, 10-C, 11-B, 12-A, 13-A, 14-B, 15-D",
+        "keys_formatted": (
+            "1-C, 2-B, 3-A, 4-B, 5-B\n"
+            "6-D, 7-B, 8-C, 9-D, 10-C\n"
+            "11-B, 12-A, 13-A, 14-B, 15-D"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'C', 2: 'B', 3: 'A', 4: 'B', 5: 'B', 6: 'D', 7: 'B', 8: 'C', 9: 'D', 10: 'C', 11: 'B', 12: 'A', 13: 'A', 14: 'B', 15: 'D'}
+    },
+    "7": {
+        "title": "7-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 7-sinf Adabiyot 1-CHSB (I variant)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "7-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/7_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-A, 2-D, 3-A, 4-C, 5-A, 6-B, 7-A, 8-B, 9-D, 10-B, 11-C, 12-D, 13-A, 14-B, 15-C",
+        "keys_formatted": (
+            "1-A, 2-D, 3-A, 4-C, 5-A\n"
+            "6-B, 7-A, 8-B, 9-D, 10-B\n"
+            "11-C, 12-D, 13-A, 14-B, 15-C"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'A', 2: 'D', 3: 'A', 4: 'C', 5: 'A', 6: 'B', 7: 'A', 8: 'B', 9: 'D', 10: 'B', 11: 'C', 12: 'D', 13: 'A', 14: 'B', 15: 'C'}
+    },
+    "8": {
+        "title": "8-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 8-sinf Adabiyot 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "8-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/8_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-C, 2-B, 3-B, 4-A, 5-C, 6-D, 7-B, 8-D, 9-B, 10-C, 11-D, 12-D, 13-A, 14-B, 15-C",
+        "keys_formatted": (
+            "1-C, 2-B, 3-B, 4-A, 5-C\n"
+            "6-D, 7-B, 8-D, 9-B, 10-C\n"
+            "11-D, 12-D, 13-A, 14-B, 15-C"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'C', 2: 'B', 3: 'B', 4: 'A', 5: 'C', 6: 'D', 7: 'B', 8: 'D', 9: 'B', 10: 'C', 11: 'D', 12: 'D', 13: 'A', 14: 'B', 15: 'C'}
+    },
     "9": {
         "title": "9-sinf Adabiyot",
         "doc_title": "2026-2027-o‘quv yili 9-sinf Adabiyot 1-CHSB (Original)",

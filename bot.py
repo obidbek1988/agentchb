@@ -1582,36 +1582,100 @@ async def mode4_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m4_select_grade_or_custom)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🇺🇿 9-sinf (O‘zbek)", callback_data="chsb_pick_9"),
-            InlineKeyboardButton(text="🇷🇺 9-класс (Русский)", callback_data="chsb_pick_9_ru")
-        ],
-        [
-            InlineKeyboardButton(text="🇺🇿 10-sinf (O‘zbek)", callback_data="chsb_pick_10"),
-            InlineKeyboardButton(text="🇷🇺 10-класс (Русский)", callback_data="chsb_pick_10_ru")
-        ],
-        [
-            InlineKeyboardButton(text="🇺🇿 11-sinf (O‘zbek)", callback_data="chsb_pick_11"),
-            InlineKeyboardButton(text="🇷🇺 11-класс (Русский)", callback_data="chsb_pick_11_ru")
-        ],
-        [InlineKeyboardButton(text="🔄 Boshqa sinf / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
+        [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
+        [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
+        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
     ])
     msg_text = (
         "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
-        "Fan: **Informatika va axborot texnologiyalari (O‘zbek sinf)**\n\n"
-        "🏛 Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazining **9, 10 va 11-sinf original test variantlari va mezonlari** tizimda tayyor mavjud!\n\n"
-        "📢 _Boshqa fanlar (Tarix, Ona tili, Ingliz tili, Matematika, Biologiya...) uchun ham test va mezonlarni agentga qo‘shib beramiz! Murojaat: @Obidbek1988_\n\n"
-        "Quyidagilardan birini tanlang:"
+        "🏛 Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazining **rasmiy original test variantlari va mezonlari** tizimda tayyor mavjud!\n\n"
+        "Qaysi fan bo‘yicha testlarni tekshirmoqchisiz? **Fanni tanlang:**\n\n"
+        "📢 _Boshqa fanlar (Tarix, Ona tili, Matematika, Ingliz tili, Biologiya...) uchun ham test va mezonlarni agentga qo‘shib beramiz! Murojaat: @Obidbek1988_"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data.in_(["chsb_pick_9", "chsb_pick_10", "chsb_pick_11", "chsb_pick_9_ru", "chsb_pick_10_ru", "chsb_pick_11_ru"]))
+@dp.callback_query(F.data == "m4_subj_info")
+async def cb_m4_subj_info(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(subject="Informatika")
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🇺🇿 9-sinf (O‘zbek)", callback_data="chsb_pick_info_9"),
+            InlineKeyboardButton(text="🇷🇺 9-класс (Русский)", callback_data="chsb_pick_info_9_ru")
+        ],
+        [
+            InlineKeyboardButton(text="🇺🇿 10-sinf (O‘zbek)", callback_data="chsb_pick_info_10"),
+            InlineKeyboardButton(text="🇷🇺 10-класс (Русский)", callback_data="chsb_pick_info_10_ru")
+        ],
+        [
+            InlineKeyboardButton(text="🇺🇿 11-sinf (O‘zbek)", callback_data="chsb_pick_info_11"),
+            InlineKeyboardButton(text="🇷🇺 11-класс (Русский)", callback_data="chsb_pick_info_11_ru")
+        ],
+        [InlineKeyboardButton(text="⬅️ Fanni o‘zgartirish", callback_data="m4_back_subjects")]
+    ])
+    msg = "💻 **Informatika va axborot texnologiyalari (Test tekshirish)**\n\nSinfni tanlang:"
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_subj_adab")
+async def cb_m4_subj_adab(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(subject="Adabiyot")
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📖 5-sinf (Original)", callback_data="chsb_pick_adab_5"),
+            InlineKeyboardButton(text="📖 6-sinf (Original)", callback_data="chsb_pick_adab_6")
+        ],
+        [
+            InlineKeyboardButton(text="📖 7-sinf (I variant)", callback_data="chsb_pick_adab_7"),
+            InlineKeyboardButton(text="📖 8-sinf (Original)", callback_data="chsb_pick_adab_8")
+        ],
+        [
+            InlineKeyboardButton(text="📖 9-sinf (Original)", callback_data="chsb_pick_adab_9"),
+            InlineKeyboardButton(text="📖 10-sinf (Original)", callback_data="chsb_pick_adab_10")
+        ],
+        [
+            InlineKeyboardButton(text="📖 11-sinf (I variant)", callback_data="chsb_pick_adab_11")
+        ],
+        [InlineKeyboardButton(text="⬅️ Fanni o‘zgartirish", callback_data="m4_back_subjects")]
+    ])
+    msg = "📖 **Adabiyot fani (Test tekshirish)**\n\nSinfni tanlang (5, 6, 7, 8, 9, 10, 11-sinf):"
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_back_subjects")
+async def cb_m4_back_subjects(callback: CallbackQuery, state: FSMContext):
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
+        [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
+        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
+    ])
+    msg_text = (
+        "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
+        "Qaysi fan bo‘yicha testlarni tekshirmoqchisiz? **Fanni tanlang:**\n\n"
+        "📢 _Boshqa fanlar (Tarix, Ona tili, Matematika, Ingliz tili, Biologiya...) uchun ham test va mezonlarni agentga qo‘shib beramiz! Murojaat: @Obidbek1988_"
+    )
+    await callback.message.edit_text(msg_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("chsb_pick_"))
 async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
-    data_str = callback.data.replace("chsb_pick_", "")
-    is_ru = "_ru" in data_str
-    grade_code = data_str.replace("_ru", "")
-    lang = "ru" if is_ru else "uz"
-    chsb_info = get_chsb_for_grade(grade_code, lang=lang)
+    raw = callback.data.replace("chsb_pick_", "")
+    if raw == "custom":
+        return await cb_chsb_pick_custom(callback, state)
+
+    is_ru = "_ru" in raw
+    clean_raw = raw.replace("_ru", "")
+    if clean_raw.startswith("adab_"):
+        subject = "Adabiyot"
+        grade_code = clean_raw.replace("adab_", "")
+        lang = "uz"
+    elif clean_raw.startswith("info_"):
+        subject = "Informatika"
+        grade_code = clean_raw.replace("info_", "")
+        lang = "ru" if is_ru else "uz"
+    else:
+        data = await state.get_data()
+        subject = data.get("subject", "Informatika")
+        grade_code = clean_raw
+        lang = "ru" if is_ru else "uz"
+
+    chsb_info = get_chsb_for_grade(grade_code, subject=subject, lang=lang)
     if not chsb_info:
         await callback.answer("Ma'lumot topilmadi.")
         return
@@ -1634,7 +1698,7 @@ async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
     )
 
     card_text = (
-        f"📚 **{chsb_info['title']} (O‘zbek sinf)**\n"
+        f"📚 **{chsb_info['title']} ({'Русский класс' if lang == 'ru' else 'O‘zbek sinf'})**\n"
         f"🏛 _{chsb_info['agency']}_\n"
         f"📋 **1-CHORAK 1-CHSB (ORIGINAL TEST VARIANTI)**\n"
         f"Jami: **{chsb_info['total_questions']} ta test — {chsb_info['max_score']} ball**\n\n"
@@ -1655,12 +1719,18 @@ async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
 async def cb_m4_show_test_pdf(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     grade = data.get("grade", "9")
-    pdf_path = data.get("pdf_path", "") or f"assets/{grade}_sinf_informatika_chsb1_original.pdf"
+    subject = data.get("subject", "Informatika")
+    pdf_path = data.get("pdf_path", "")
+    if not pdf_path or not os.path.exists(pdf_path):
+        if "adab" in subject.lower():
+            pdf_path = f"assets/{grade}_sinf_adabiyot_chsb1_original.pdf"
+        else:
+            pdf_path = f"assets/{grade}_sinf_informatika_chsb1_original.pdf"
     if os.path.exists(pdf_path):
-        doc = FSInputFile(pdf_path, filename=f"{grade}_sinf_Informatika_1_CHSB_Original_Test.pdf")
+        doc = FSInputFile(pdf_path, filename=f"{grade}_sinf_{subject}_1_CHSB_Original_Test.pdf")
         await callback.message.answer_document(
             doc,
-            caption=f"📄 **{grade}-sinf Informatika 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**\n\nUshbu test varianti asosida baholash mezoni va to‘g‘ri javoblar kaliti tuzilgan.",
+            caption=f"📄 **{grade}-sinf {subject} 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**\n\nUshbu test varianti asosida baholash mezoni va to‘g‘ri javoblar kaliti tuzilgan.",
             parse_mode="Markdown"
         )
         await callback.answer("PDF yuborildi.")
@@ -2456,12 +2526,24 @@ async def cb_m6_subj_info(callback: CallbackQuery, state: FSMContext):
 async def cb_m6_subj_adab(callback: CallbackQuery, state: FSMContext):
     await state.update_data(subject="Adabiyot")
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📖 9-sinf Adabiyot (Original)", callback_data="chsb_adj_pick_adab_9")],
-        [InlineKeyboardButton(text="📖 10-sinf Adabiyot (Original)", callback_data="chsb_adj_pick_adab_10")],
-        [InlineKeyboardButton(text="📖 11-sinf Adabiyot (Original)", callback_data="chsb_adj_pick_adab_11")],
+        [
+            InlineKeyboardButton(text="📖 5-sinf (Original)", callback_data="chsb_adj_pick_adab_5"),
+            InlineKeyboardButton(text="📖 6-sinf (Original)", callback_data="chsb_adj_pick_adab_6")
+        ],
+        [
+            InlineKeyboardButton(text="📖 7-sinf (I variant)", callback_data="chsb_adj_pick_adab_7"),
+            InlineKeyboardButton(text="📖 8-sinf (Original)", callback_data="chsb_adj_pick_adab_8")
+        ],
+        [
+            InlineKeyboardButton(text="📖 9-sinf (Original)", callback_data="chsb_adj_pick_adab_9"),
+            InlineKeyboardButton(text="📖 10-sinf (Original)", callback_data="chsb_adj_pick_adab_10")
+        ],
+        [
+            InlineKeyboardButton(text="📖 11-sinf (I variant)", callback_data="chsb_adj_pick_adab_11")
+        ],
         [InlineKeyboardButton(text="⬅️ Fanni o‘zgartirish", callback_data="m6_back_subjects")]
     ])
-    msg = "📖 **Adabiyot fani (Bahoga moslash)**\n\nSinfni tanlang:"
+    msg = "📖 **Adabiyot fani (Bahoga moslash)**\n\nSinfni tanlang (5, 6, 7, 8, 9, 10, 11-sinf):"
     await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "m6_back_subjects")
