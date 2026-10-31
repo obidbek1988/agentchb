@@ -314,14 +314,10 @@ def get_or_create_user(user_id: int, username: str = "", full_name: str = "") ->
 def can_generate_report(user_id: int, admin_id: int = 6580113791) -> (bool, str):
     """
     Foydalanuvchi hisobot yarata oladimi?
-    1. Agar Admin bo'lsa -> Cheksiz ruxsat
-    2. Agar balansi > 0 bo'lsa -> Ruxsat (pullik balansdan)
-    3. Agar hali bepul sinov ishlatmagan bo'lsa -> Ruxsat (1-bepul sinov)
-    4. Aks holda -> To'lov talab qilinadi
+    1. Agar balansi > 0 bo'lsa -> Ruxsat (pullik balansdan)
+    2. Agar hali bepul sinov ishlatmagan bo'lsa -> Ruxsat (1-bepul sinov)
+    3. Aks holda -> To'lov talab qilinadi (Admin uchun ham tekshiriladi)
     """
-    if user_id == admin_id:
-        return True, "admin"
-        
     user = get_or_create_user(user_id)
     if user["balance_classes"] > 0:
         return True, "paid"
@@ -331,10 +327,7 @@ def can_generate_report(user_id: int, admin_id: int = 6580113791) -> (bool, str)
     return False, "payment_required"
 
 def consume_credit(user_id: int, credit_type: str, admin_id: int = 6580113791):
-    """Hisobot muvaffaqiyatli tayyorlangandan keyin kreditni yechish"""
-    if user_id == admin_id:
-        return
-        
+    """Hisobot muvaffaqiyatli tayyorlangandan keyin kreditni yechish (Admin uchun ham yechiladi)"""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if credit_type == "free_trial":

@@ -3211,17 +3211,29 @@ async def admin_topup_start(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
     await state.set_state(BotStates.admin_topup_select_user)
+    
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👤 O‘z hisobimga sinf qo‘shish (Admin)", callback_data="adm_topup_self")]
+    ])
     await message.answer(
-        "💳 **MIJOZ HISOBINI TO‘LDIRISH (ADMIN BO‘LIMI)**\n\n"
-        "Qaysi mijozning hisobiga sinf/pul o‘tkazmoqchisiz?\n"
-        "Mijozning **Telegram ID** raqamini, **@username** ini yoki ism-familiyasini yozing:\n\n"
-        "*(Bekor qilish uchun: '❌ Bekor qilish')*",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
-            resize_keyboard=True
-        ),
+        "💳 **HISOB TO‘LDIRISH (ADMIN BO‘LIMI)**\n\n"
+        "Qaysi foydalanuvchining hisobiga sinf qo‘shmoqchisiz?\n"
+        "Foydalanuvchining **Telegram ID** raqamini, **@username** ini yoki ismini yozing.\n\n"
+        "💡 *O‘zingizning balansingizga sinf qo‘shish uchun pastdagi tugmani bosing:*",
+        reply_markup=ikb,
         parse_mode="Markdown"
     )
+
+@dp.callback_query(F.data == "adm_topup_self")
+async def cb_adm_topup_self(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin uchun!", show_alert=True)
+        return
+    u = db_service.get_or_create_user(ADMIN_ID, callback.from_user.username, callback.from_user.full_name)
+    await state.update_data(target_uid=ADMIN_ID)
+    await state.set_state(BotStates.admin_topup_enter_amount)
+    await show_user_topup_card(callback.message, u)
+    await callback.answer()
 
 @dp.message(BotStates.admin_topup_select_user)
 async def admin_topup_find_user(message: types.Message, state: FSMContext):
