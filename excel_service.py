@@ -178,17 +178,11 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
         if not note or str(note).strip() in ["", "Tekshirildi", "None"]:
             note = generate_bsb_student_note(tot, max_score, task_scores, criteria)
         c_j = ws.cell(row=curr_row, column=10, value=to_uzbek_latin(str(note)))
-        c_j.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        c_j.alignment = Alignment(horizontal="left", vertical="center", wrap_text=False)
         c_j.border = thin_border
         c_j.font = font_data
 
-        note_str = str(note)
-        if len(note_str) > 55:
-            ws.row_dimensions[curr_row].height = 30
-        elif len(note_str) > 28:
-            ws.row_dimensions[curr_row].height = 25
-        else:
-            ws.row_dimensions[curr_row].height = 20
+        ws.row_dimensions[curr_row].height = 20
 
     end_row = start_row + len(students) - 1
     sig_row = end_row + 2
@@ -207,7 +201,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.column_dimensions["G"].width = 13
     ws.column_dimensions["H"].width = 9.5
     ws.column_dimensions["I"].width = 8
-    ws.column_dimensions["J"].width = 46
+    ws.column_dimensions["J"].width = 65
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
@@ -376,7 +370,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.column_dimensions["E"].width = 17
     ws.column_dimensions["F"].width = 10
     ws.column_dimensions["G"].width = 8
-    ws.column_dimensions["H"].width = 34
+    ws.column_dimensions["H"].width = 60
     ws.column_dimensions["I"].width = 48
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
