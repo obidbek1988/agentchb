@@ -1721,15 +1721,18 @@ async def mode4_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m4_select_grade_or_custom)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
-        [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
+        [InlineKeyboardButton(text="🌐 Universal mezon va kalit (Ixtiyoriy fan)", callback_data="m4_universal_start")],
+        [InlineKeyboardButton(text="💻 Informatika va AT (Original)", callback_data="m4_subj_info")],
+        [InlineKeyboardButton(text="📖 Adabiyot (Original)", callback_data="m4_subj_adab")],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m4_to_main_menu")]
     ])
     msg_text = (
-        "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
-        "🏛 Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazining **rasmiy original test variantlari va mezonlari** tizimda tayyor mavjud!\n\n"
-        "Qaysi fan bo‘yicha testlarni tekshirmoqchisiz? **Fanni tanlang:**\n\n"
-        "📢 _Boshqa fanlar (Tarix, Ona tili, Matematika, Ingliz tili, Biologiya...) uchun ham test va mezonlarni agentga qo‘shib beramiz! Murojaat: @Obidbek1988_"
+        "🎯 **4-REJIM: CHSB TESTLARNI TEKSHIRISH (1-CHORAK)**\n\n"
+        "🌐 **Universal mezon va kalit (Har qanday fan uchun):**\n"
+        "• Istalgan fan (Tarix, Matematika, Ona tili, Fizika, Ingliz tili, Kimyo, Biologiya va b.) uchun (B, Q, M) mezonini hamda 1–15 to‘g‘ri javoblar kalitini o‘zingizga moslab bemalol o‘zgartirishingiz mumkin!\n"
+        "• AI test varaqalaridan o‘quvchining ismi va 1–15 javoblarini o‘qiydi, Python esa siz kiritgan mezon va kalitga qatʼiy amal qilib 100% xatosiz hisoblaydi va Excel tayyorlaydi.\n\n"
+        "🏛 Shuningdek, tizimda Informatika va Adabiyot fanlarining rasmiy original test mezonlari tayyor mavjud.\n\n"
+        "Bo‘limni tanlang:"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
@@ -1952,17 +1955,27 @@ async def mode4_custom_class_text(message: types.Message, state: FSMContext):
     data = await state.get_data()
     grade = data.get("grade", "9")
 
-    # Format nicely
-    if len(txt) <= 2 and (txt.isalpha() or txt.isdigit()):
-        cname = f"{grade}-{txt.upper()}"
-    elif txt.startswith(grade):
-        cname = txt.upper()
+    parts = txt.split()
+    if len(parts) >= 2:
+        cname = parts[0].upper()
+        subj = " ".join(parts[1:])
+        await state.update_data(class_name=cname, subject=subj)
+        await message.answer(f"✅ Sinf: **{cname}**, Fan: **{subj}** deb belgilandi!", parse_mode="Markdown")
     else:
-        cname = txt
+        if len(txt) <= 2 and (txt.isalpha() or txt.isdigit()):
+            cname = f"{grade}-{txt.upper()}" if grade != "Universal" else f"Sinf-{txt.upper()}"
+        elif txt.startswith(grade):
+            cname = txt.upper()
+        else:
+            cname = txt
+        await state.update_data(class_name=cname)
+        await message.answer(f"✅ Sinf nomi **{cname}** deb belgilandi!", parse_mode="Markdown")
 
-    await state.update_data(class_name=cname)
-    await message.answer(f"✅ Sinf nomi **{cname}** deb belgilandi!", parse_mode="Markdown")
-    await show_m4_criteria_card(message, state, is_edit=False)
+    data = await state.get_data()
+    if data.get("grade") == "Universal":
+        await show_m4_universal_mezon_card(message, state)
+    else:
+        await show_m4_criteria_card(message, state, is_edit=False)
 
 @dp.callback_query(F.data == "m4_show_test_pdf")
 async def cb_m4_show_test_pdf(callback: CallbackQuery, state: FSMContext):
@@ -2092,116 +2105,78 @@ async def mode4_edit_criteria_handler(message: types.Message, state: FSMContext)
     ])
     await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data == "chsb_pick_custom")
-async def cb_chsb_pick_custom(callback: CallbackQuery, state: FSMContext):
-    await state.set_state(BotStates.m4_criteria)
+def format_m4_keys_display(keys_dict: dict, b_q: list, q_q: list, m_q: list) -> str:
+    lines = []
+    for i in range(1, 16):
+        if i in b_q:
+            lvl = "[B]"
+        elif i in m_q:
+            lvl = "[M]"
+        else:
+            lvl = "[Q]"
+        ans = keys_dict.get(i, "A")
+        lines.append(f"{i:2d}. {lvl} {ans}")
+    return "\n".join(lines)
+
+@dp.callback_query(F.data.in_(["m4_universal_start", "chsb_pick_custom"]))
+async def cb_m4_universal_start(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(
+        grade="Universal",
+        subject="CHSB Test",
+        lang="uz",
+        class_name="Sinf",
+        b_questions=[1, 4, 7],
+        q_questions=[2, 3, 5, 6, 8, 9, 10, 11, 12, 14],
+        m_questions=[13, 15],
+        keys_text="1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C"
+    )
+    await callback.answer("Universal rejim")
+    await show_m4_universal_mezon_card(callback.message, state)
+
+async def show_m4_universal_mezon_card(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    b_q = data.get("b_questions", [1, 4, 7])
+    q_q = data.get("q_questions", [2, 3, 5, 6, 8, 9, 10, 11, 12, 14])
+    m_q = data.get("m_questions", [13, 15])
+    cname = data.get("class_name", "Sinf")
+    subj = data.get("subject", "CHSB Test")
+
+    b_str = ", ".join(str(x) for x in b_q)
+    q_str = ", ".join(str(x) for x in q_q)
+    m_str = ", ".join(str(x) for x in m_q)
+
+    card_text = (
+        f"🌐 **UNIVERSAL CHSB BAHOLASH MEZONI**\n"
+        f"📚 **Sinf / Fan:** {cname} | {subj}\n"
+        f"📋 **Jami: 15 ta test — 40 ball**\n\n"
+        f"📊 **Hozirgi B, Q, M taqsimoti:**\n"
+        f"• **[B] Bilish** ({len(b_q)} ta: {b_str}) ➔ 2.0 balldan\n"
+        f"• **[Q] Qo‘llash** ({len(q_q)} ta: {q_str}) ➔ 2.4 balldan\n"
+        f"• **[M] Mulohaza** ({len(m_q)} ta: {m_str}) ➔ 5.0 balldan\n\n"
+        f"💡 _Har qanday fan uchun mezondagi savollar taqsimotini yoki sinf/fan nomini qo‘lda tahrirlashingiz mumkin._"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash (Kalitga o‘tish)", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
+        [InlineKeyboardButton(text="🏷 Fan va sinf nomini yozish", callback_data="m4_edit_class_subject")],
+        [InlineKeyboardButton(text="⬅️ Fanni tanlashga qaytish", callback_data="m4_back_subjects")]
+    ])
+    try:
+        await message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+    except Exception:
+        await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_edit_class_subject")
+async def cb_m4_edit_class_subject(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m4_custom_class_input)
     await callback.answer()
     msg = (
-        "📋 **O‘Z MEZONINGIZNI YUKLASH (Boshqa sinf yoki fan uchun):**\n\n"
-        "Iltimos, CHSB baholash mezonini yoki namunaviy test varaqasini yuboring:\n"
-        "*(Rasm, PDF yoki matn ko‘rinishida)*\n\n"
-        "💡 _AI mezonni o‘qib, 1 dan 15 gacha (B), (Q), (M) taqsimotini aniqlab beradi va uni tahrirlashingiz mumkin bo‘ladi._"
+        "🏷 **SINF VA FAN NOMINI KIRITING:**\n\n"
+        "Masalan:\n"
+        "`9-A Tarix` yoki `10-B Matematika` yoki `8-V Ona tili`\n\n"
+        "*(Bekor qilish uchun: '❌ Bekor qilish')*"
     )
-    await callback.message.answer(msg, reply_markup=ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
-        resize_keyboard=True
-    ), parse_mode="Markdown")
-
-@dp.message(BotStates.m4_criteria, F.photo)
-async def mode4_custom_criteria_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    cpath = f"temp/m4_c_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=cpath)
-
-    status_msg = await message.answer("⏳ Mezon fotosurati tahlil qilinmoqda...")
-    try:
-        prompt = (
-            "Ushbu CHSB mezon rasmini tahlil qiling. 1 dan 15 gacha bo'lgan test savollarining qaysi biri "
-            "(B) Bilish, qaysi biri (Q) Qo'llash va qaysi biri (M) Mulohaza ekanligini aniqlang. "
-            "Qisqa matn ko'rinishida quyidagicha qaytaring: "
-            "1-B, 2-Q, 3-Q, 4-B... va ballar taqsimotini ko'rsating. Boshqa ortiqcha gap yozmang."
-        )
-        parsed_crit = ai_service._send_prompt_to_gemini(prompt, [cpath])
-        crit_str = str(parsed_crit).strip()
-    except Exception as e:
-        logger.error(f"Custom criteria AI error: {e}")
-        crit_str = "1-B, 2-Q, 3-Q, 4-B, 5-Q, 6-Q, 7-B, 8-Q, 9-Q, 10-Q, 11-Q, 12-Q, 13-M, 14-Q, 15-M (40 ball)"
-
-    await status_msg.delete()
-    await state.update_data(criteria_path=cpath, criteria_text=crit_str)
-
-    msg = (
-        f"📋 **ANIQLANGAN BAHOLASH MEZONI:**\n\n"
-        f"{crit_str}\n\n"
-        f"Mezon to‘g‘rimi? Tasdiqlaysizmi yoki tahrirlaysizmi?"
-    )
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
-        [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
-    ])
-    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
-
-@dp.message(BotStates.m4_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
-async def mode4_custom_criteria_back(message: types.Message, state: FSMContext):
-    await mode4_start(message, state)
-
-@dp.message(BotStates.m4_criteria, F.document)
-async def mode4_custom_criteria_doc(message: types.Message, state: FSMContext):
-    fname = (message.document.file_name or "").lower()
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m4_c_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        images = pdf_to_images(pdf_path)
-        cpath = images[0] if images else pdf_path
-
-        status_msg = await message.answer("⏳ PDF mezon tahlil qilinmoqda...")
-        try:
-            prompt = (
-                "Ushbu CHSB mezon faylini tahlil qiling. 1 dan 15 gacha bo'lgan test savollarining qaysi biri "
-                "(B) Bilish, qaysi biri (Q) Qo'llash va qaysi biri (M) Mulohaza ekanligini aniqlang. "
-                "Qisqa matn ko'rinishida: 1-B, 2-Q, 3-Q... shaklida qaytaring."
-            )
-            parsed_crit = ai_service._send_prompt_to_gemini(prompt, [cpath])
-            crit_str = str(parsed_crit).strip()
-        except Exception:
-            crit_str = "1-B, 2-Q, 3-Q, 4-B, 5-Q, 6-Q, 7-B, 8-Q, 9-Q, 10-Q, 11-Q, 12-Q, 13-M, 14-Q, 15-M (40 ball)"
-
-        await status_msg.delete()
-        await state.update_data(criteria_path=cpath, criteria_text=crit_str)
-
-        msg = (
-            f"📋 **PDF DAN ANIQLANGAN MEZON:**\n\n"
-            f"{crit_str}\n\n"
-            f"Mezon to‘g‘rimi? Tasdiqlaysizmi yoki tahrirlaysizmi?"
-        )
-        ikb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
-            [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
-        ])
-        await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
-    else:
-        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
-
-@dp.message(BotStates.m4_criteria, F.text)
-async def mode4_custom_criteria_text(message: types.Message, state: FSMContext):
-    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
-        await state.clear()
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
-        return
-
-    crit_str = message.text.strip()
-    await state.update_data(criteria_text=crit_str, criteria_path="")
-    msg = (
-        f"📋 **QABUL QILINGAN MEZON:**\n\n"
-        f"`{crit_str}`\n\n"
-        f"Mezon to‘g‘rimi? Tasdiqlaysizmi yoki tahrirlaysizmi?"
-    )
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
-        [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
-    ])
-    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+    await callback.message.answer(msg, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "m4_confirm_criteria")
 async def cb_m4_confirm_criteria(callback: CallbackQuery, state: FSMContext):
@@ -2212,20 +2187,39 @@ async def cb_m4_confirm_criteria(callback: CallbackQuery, state: FSMContext):
         await state.update_data(keys_text=keys_text)
 
     await callback.answer("Mezon tasdiqlandi!")
-    await show_m4_keys_card(callback.message, keys_text)
+    await show_m4_keys_card(callback.message, state)
 
-async def show_m4_keys_card(message: types.Message, keys_str: str):
+async def show_m4_keys_card(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    keys_text = data.get("keys_text", "")
+    from ai_service import parse_keys_string
+    kdict = parse_keys_string(keys_text)
+    if not kdict:
+        kdict = {1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C', 6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B', 11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'}
+
+    b_q = data.get("b_questions", [1, 4, 7])
+    q_q = data.get("q_questions", [2, 3, 5, 6, 8, 9, 10, 11, 12, 14])
+    m_q = data.get("m_questions", [13, 15])
+
+    formatted_keys = format_m4_keys_display(kdict, b_q, q_q, m_q)
+
     msg_text = (
         "✅ **CHSB Baholash mezoni tasdiqlandi!**\n\n"
         "📍 **2-QADAM (3 tadan): Testning to‘g‘ri javoblar KALITI**\n\n"
-        "🔑 **Hozirgi to‘g‘ri javoblar kaliti:**\n"
-        f"`{keys_str}`\n\n"
+        "🔑 **Hozirgi to‘g‘ri javoblar kaliti (15 ta test):**\n\n"
+        f"```\n{formatted_keys}\n```\n\n"
+        "💡 _Har bir savol raqami oldida uning mezon darajasi ko‘rsatilgan:_\n"
+        "• **[B] Bilish** — 2.0 ball\n"
+        "• **[Q] Qo‘llash** — 2.4 ball\n"
+        "• **[M] Mulohaza** — 5.0 ball\n"
+        "*(Jami: 40 ball)*\n\n"
         "Shu kalitni tasdiqlaysizmi yoki o‘zgartirmoqchimisiz?"
     )
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Shu to‘g‘ri kalitni tasdiqlash", callback_data="m4_confirm_key")],
         [InlineKeyboardButton(text="✏️ Kalitni tahrirlash (Matn)", callback_data="m4_edit_key")],
-        [InlineKeyboardButton(text="⬅️ Orqaga (Mezon kartochkasiga)", callback_data="m4_back_to_criteria")]
+        [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Mezonga qaytish)", callback_data="m4_back_to_criteria")]
     ])
     try:
         await message.edit_text(msg_text, reply_markup=ikb, parse_mode="Markdown")
@@ -2236,11 +2230,19 @@ async def show_m4_keys_card(message: types.Message, keys_str: str):
 async def cb_m4_edit_key(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m4_edit_keys_input)
     await callback.answer()
+    data = await state.get_data()
+    b_q = data.get("b_questions", [1, 4, 7])
+    q_q = data.get("q_questions", [2, 3, 5, 6, 8, 9, 10, 11, 12, 14])
+    m_q = data.get("m_questions", [13, 15])
+    from ai_service import parse_keys_string
+    kdict = parse_keys_string(data.get("keys_text", ""))
+    sample_block = format_m4_keys_display(kdict, b_q, q_q, m_q)
+
     msg = (
-        "✏️ **TO‘G‘RI JAVOBLAR KALITINI KIRITING:**\n\n"
-        "Kalitni faqat matn ko‘rinishida yozing:\n\n"
-        "Masalan:\n"
-        "`1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C`\n\n"
+        "✏️ **TO‘G‘RI JAVOBLAR KALITINI TAHRIRLASH**\n\n"
+        "Quyidagi matnni nusxalab olib, javob harflarini o‘zgartirib botga yuboring:\n\n"
+        f"```\n{sample_block}\n```\n\n"
+        "💡 _Yoki oddiy shaklda `1-A, 2-B, 3-C, 4-D...` deb yuborsangiz ham bo‘ladi._\n"
         "*(Bekor qilish uchun: '❌ Bekor qilish')*"
     )
     await callback.message.answer(msg, parse_mode="Markdown")
@@ -2249,12 +2251,24 @@ async def cb_m4_edit_key(callback: CallbackQuery, state: FSMContext):
 async def mode4_edit_keys_text(message: types.Message, state: FSMContext):
     text = (message.text or "").strip()
     if text.lower() in ["⬅️ orqaga", "orqaga", "/back", "back", "❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
-        data = await state.get_data()
-        await show_m4_keys_card(message, data.get("keys_text", ""))
+        await show_m4_keys_card(message, state)
         return
 
-    await state.update_data(keys_text=text, keys_path="")
-    await show_m4_keys_card(message, text)
+    from ai_service import parse_keys_string, parse_bqm_string
+    parsed_k = parse_keys_string(text)
+    if not parsed_k:
+        await message.answer("⚠️ Javob kalitlari aniqlanmadi. Iltimos, `1-A, 2-B, 3-C...` shaklida yuboring.")
+        return
+
+    cb_q, cq_q, cm_q = parse_bqm_string(text)
+    updates = {"keys_text": text, "keys_path": ""}
+    if cb_q or cq_q or cm_q:
+        if cb_q: updates["b_questions"] = cb_q
+        if cq_q: updates["q_questions"] = cq_q
+        if cm_q: updates["m_questions"] = cm_q
+
+    await state.update_data(**updates)
+    await show_m4_keys_card(message, state)
 
 @dp.message(BotStates.m4_edit_keys_input, F.photo)
 async def mode4_edit_keys_photo(message: types.Message, state: FSMContext):

@@ -14,16 +14,54 @@ from queue_manager import queue_manager
 logger = logging.getLogger(__name__)
 
 
+def parse_bqm_string(text: str):
+    """Parses text to determine which questions belong to B, Q, and M levels."""
+    b_q, q_q, m_q = [], [], []
+    lines = str(text).splitlines()
+    for line in lines:
+        l_low = line.lower()
+        if any(k in l_low for k in ["bilish", "(b)", "[b]", "b:"]):
+            b_q.extend([int(n) for n in re.findall(r'\b(\d+)\b', line)])
+        elif any(k in l_low for k in ["qo‘llash", "qo'llash", "qollash", "(q)", "[q]", "q:"]):
+            q_q.extend([int(n) for n in re.findall(r'\b(\d+)\b', line)])
+        elif any(k in l_low for k in ["mulohaza", "(m)", "[m]", "m:"]):
+            m_q.extend([int(n) for n in re.findall(r'\b(\d+)\b', line)])
+
+    if not (b_q or q_q or m_q):
+        for m in re.finditer(r'(\d+)\s*(?:[-.:)]|\.)?\s*\[?([BQMбқмBqmБҚМ])\]?', str(text), re.IGNORECASE):
+            num = int(m.group(1))
+            lvl = m.group(2).upper()
+            if lvl in ['B', 'Б']:
+                b_q.append(num)
+            elif lvl in ['Q', 'Қ']:
+                q_q.append(num)
+            elif lvl in ['M', 'М']:
+                m_q.append(num)
+
+    b_q = [n for n in sorted(list(set(b_q))) if 1 <= n <= 15]
+    q_q = [n for n in sorted(list(set(q_q))) if 1 <= n <= 15]
+    m_q = [n for n in sorted(list(set(m_q))) if 1 <= n <= 15]
+    return b_q, q_q, m_q
+
 def parse_keys_string(keys_str: Any) -> Dict[int, str]:
     res = {}
     if not keys_str:
         return res
     cyr_map = {'А': 'A', 'В': 'B', 'С': 'C', 'Д': 'D', 'а': 'A', 'в': 'B', 'с': 'C', 'д': 'D'}
-    pairs = re.findall(r'(\d+)\s*[-.:)]\s*([A-Za-zА-Яа-я])', str(keys_str))
-    for q_num, ans in pairs:
-        ch = ans.upper()
-        ch = cyr_map.get(ch, ch)
-        res[int(q_num)] = ch
+    s = str(keys_str)
+    # Match patterns like: "1. [B] A", "1-A", "1: A", "1.[B]A", "1 A"
+    pat = re.compile(r'(\d+)\s*(?:[-.:)]|\.)?\s*(?:\[?[BQMбқмBqmБҚМ]\]?\s*[-.:)]?\s*)?([A-Da-dА-Да-д])\b', re.IGNORECASE)
+    for m in pat.finditer(s):
+        q_num = int(m.group(1))
+        ans = cyr_map.get(m.group(2).upper(), m.group(2).upper())
+        res[q_num] = ans
+
+    # If regex missed and input is just 15 space/comma separated letters like "A B C D..."
+    if len(res) < 10:
+        clean_tokens = [cyr_map.get(t.upper(), t.upper()) for t in re.findall(r'\b([A-Da-dА-Да-д])\b', s)]
+        if len(clean_tokens) >= 15:
+            res = {i + 1: clean_tokens[i] for i in range(15)}
+
     return res
 
 def get_chsb_scoring_config(grade: str = "9", subject: str = "Informatika", lang: str = "uz", custom_keys: str = "", custom_criteria: str = "") -> Dict[str, Any]:
@@ -37,12 +75,25 @@ def get_chsb_scoring_config(grade: str = "9", subject: str = "Informatika", lang
             key_dict.update(parsed)
 
     if not key_dict:
-        # Standard fallback for 9-sinf Informatika
         key_dict = {1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C', 6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B', 11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'}
 
     b_q = list(cfg.get("b_questions", []))
     q_q = list(cfg.get("q_questions", []))
     m_q = list(cfg.get("m_questions", []))
+
+    # Check custom_criteria or custom_keys for custom BQM levels
+    if custom_criteria and isinstance(custom_criteria, str):
+        cb_q, cq_q, cm_q = parse_bqm_string(custom_criteria)
+        if cb_q or cq_q or cm_q:
+            b_q = cb_q or b_q
+            q_q = cq_q or q_q
+            m_q = cm_q or m_q
+    elif custom_keys and isinstance(custom_keys, str):
+        cb_q, cq_q, cm_q = parse_bqm_string(custom_keys)
+        if cb_q or cq_q or cm_q:
+            b_q = cb_q or b_q
+            q_q = cq_q or q_q
+            m_q = cm_q or m_q
 
     if not b_q or not q_q or not m_q:
         b_q = [1, 4, 7]
