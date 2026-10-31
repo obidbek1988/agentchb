@@ -124,6 +124,8 @@ class BotStates(StatesGroup):
     m3_criteria = State()
 
     m4_select_grade_or_custom = State()
+    m4_select_class_letter = State()
+    m4_custom_class_input = State()
     m4_criteria = State()
     m4_edit_criteria_input = State()
     m4_keys = State()
@@ -1723,6 +1725,69 @@ async def cb_m4_back_subjects(callback: CallbackQuery, state: FSMContext):
     )
     await callback.message.edit_text(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
+def get_m4_class_letters_keyboard(grade_code: str, lang: str = "uz"):
+    if lang == "ru":
+        letters = ["А", "Б", "В", "Г", "Д", "Е", "Ж"]
+    else:
+        letters = ["A", "B", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "V"]
+
+    rows = []
+    row = []
+    for l in letters:
+        c_label = f"{grade_code}-{l}"
+        row.append(InlineKeyboardButton(text=f"📌 {c_label}", callback_data=f"m4_cname_{c_label}"))
+        if len(row) == 4:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+
+    rows.append([
+        InlineKeyboardButton(text=f"➡️ O‘tkazish ({grade_code}-sinf)", callback_data=f"m4_cname_{grade_code}-sinf"),
+        InlineKeyboardButton(text="✏️ Boshqa harf yozish", callback_data="m4_cname_custom")
+    ])
+    rows.append([
+        InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m4_back_to_grades")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+async def show_m4_criteria_card(message: types.Message, state: FSMContext, is_edit: bool = False):
+    data = await state.get_data()
+    grade_code = data.get("grade", "9")
+    subject = data.get("subject", "Informatika")
+    lang = data.get("lang", "uz")
+    class_name = data.get("class_name", f"{grade_code}-sinf")
+    crit_summary = data.get("criteria_text", "")
+    chsb_info = get_chsb_for_grade(grade_code, subject=subject, lang=lang)
+
+    agency = chsb_info.get("agency", "Pedagogik mahorat markazi") if chsb_info else "Pedagogik mahorat markazi"
+    total_q = chsb_info.get("total_questions", 15) if chsb_info else 15
+    max_s = chsb_info.get("max_score", 40) if chsb_info else 40
+
+    card_text = (
+        f"📚 **{class_name} sinf ({'Русский класс' if lang == 'ru' else 'O‘zbek sinf'}) — {subject}**\n"
+        f"🏛 _{agency}_\n"
+        f"📋 **1-CHORAK 1-CHSB (ORIGINAL TEST VARIANTI)**\n"
+        f"Jami: **{total_q} ta test — {max_s} ball**\n\n"
+        f"{crit_summary}\n\n"
+        f"Pastdagi tugmalar orqali test varaqasini ko‘rishingiz yoki mezonni tasdiqlashingiz mumkin:"
+    )
+
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
+        [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
+        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Sinf harfini o‘zgartirish)", callback_data="m4_back_to_letters")]
+    ])
+    if is_edit:
+        try:
+            await message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+        except Exception:
+            await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
+    else:
+        await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
+
 @dp.callback_query(F.data.startswith("chsb_pick_"))
 async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
     raw = callback.data.replace("chsb_pick_", "")
@@ -1767,24 +1832,71 @@ async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
         pdf_path=chsb_info.get("pdf_path", "")
     )
 
-    card_text = (
-        f"📚 **{chsb_info['title']} ({'Русский класс' if lang == 'ru' else 'O‘zbek sinf'})**\n"
-        f"🏛 _{chsb_info['agency']}_\n"
-        f"📋 **1-CHORAK 1-CHSB (ORIGINAL TEST VARIANTI)**\n"
-        f"Jami: **{chsb_info['total_questions']} ta test — {chsb_info['max_score']} ball**\n\n"
-        f"{crit_summary}\n\n"
-        f"Pastdagi tugmalar orqali test varaqasini ko‘rishingiz yoki mezonni tasdiqlashingiz mumkin:"
+    await state.set_state(BotStates.m4_select_class_letter)
+    ikb = get_m4_class_letters_keyboard(grade_code, lang)
+    msg = (
+        f"🎯 **{grade_code}-sinf ({subject}) tanlandi!**\n\n"
+        f"Hisobot aynan qaysi sinf (harf) uchun tayyorlansin? **Sinf harfini tanlang:**"
     )
-
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
-        [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
-        [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
-        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
-        [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m4_back_to_grades")]
-    ])
     await callback.answer()
-    await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m4_back_to_letters")
+async def cb_m4_back_to_letters(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    grade = data.get("grade", "9")
+    subject = data.get("subject", "Informatika")
+    lang = data.get("lang", "uz")
+    ikb = get_m4_class_letters_keyboard(grade, lang)
+    msg = f"🎯 **{grade}-sinf ({subject})**\n\nSinf harfini tanlang:"
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("m4_cname_"))
+async def cb_m4_set_cname(callback: CallbackQuery, state: FSMContext):
+    cname = callback.data.replace("m4_cname_", "").strip()
+    if cname == "custom":
+        await state.set_state(BotStates.m4_custom_class_input)
+        await callback.answer()
+        data = await state.get_data()
+        grade = data.get("grade", "9")
+        msg = (
+            f"✏️ **{grade}-sinf uchun harf yoki sinf nomini yozing:**\n\n"
+            f"Masalan: `G` yoki `{grade}-G` (yoki `{grade}-rus`):\n\n"
+            f"*(Bekor qilish uchun: '❌ Bekor qilish')*"
+        )
+        await callback.message.answer(msg, parse_mode="Markdown")
+        return
+
+    await state.update_data(class_name=cname)
+    await callback.answer(f"{cname} tanlandi!")
+    await show_m4_criteria_card(callback.message, state, is_edit=True)
+
+@dp.message(BotStates.m4_custom_class_input, F.text)
+async def mode4_custom_class_text(message: types.Message, state: FSMContext):
+    txt = (message.text or "").strip()
+    if txt.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel", "⬅️ orqaga", "orqaga", "/back", "back"]:
+        data = await state.get_data()
+        grade = data.get("grade", "9")
+        lang = data.get("lang", "uz")
+        await state.set_state(BotStates.m4_select_class_letter)
+        ikb = get_m4_class_letters_keyboard(grade, lang)
+        await message.answer(f"🎯 **{grade}-sinf** | Sinf harfini tanlang:", reply_markup=ikb, parse_mode="Markdown")
+        return
+
+    data = await state.get_data()
+    grade = data.get("grade", "9")
+
+    # Format nicely
+    if len(txt) <= 2 and (txt.isalpha() or txt.isdigit()):
+        cname = f"{grade}-{txt.upper()}"
+    elif txt.startswith(grade):
+        cname = txt.upper()
+    else:
+        cname = txt
+
+    await state.update_data(class_name=cname)
+    await message.answer(f"✅ Sinf nomi **{cname}** deb belgilandi!", parse_mode="Markdown")
+    await show_m4_criteria_card(message, state, is_edit=False)
 
 @dp.callback_query(F.data == "m4_show_test_pdf")
 async def cb_m4_show_test_pdf(callback: CallbackQuery, state: FSMContext):
@@ -2170,6 +2282,8 @@ async def _ensure_m4_keys_configured(state: FSMContext):
     await state.set_state(BotStates.m4_student_tests)
 
 @dp.message(BotStates.m4_select_grade_or_custom, F.document)
+@dp.message(BotStates.m4_select_class_letter, F.document)
+@dp.message(BotStates.m4_custom_class_input, F.document)
 @dp.message(BotStates.m4_keys, F.document)
 @dp.message(BotStates.m4_student_tests, F.document)
 async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
@@ -2213,6 +2327,8 @@ async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
         await message.answer("Iltimos, o‘quvchilar test varaqalarini rasm yoki PDF formatida yuboring.")
 
 @dp.message(BotStates.m4_select_grade_or_custom, F.photo)
+@dp.message(BotStates.m4_select_class_letter, F.photo)
+@dp.message(BotStates.m4_custom_class_input, F.photo)
 @dp.message(BotStates.m4_keys, F.photo)
 @dp.message(BotStates.m4_student_tests, F.photo)
 async def mode4_photo(message: types.Message, state: FSMContext):
@@ -2305,8 +2421,11 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
             is_text_criteria=is_text_crit
         )
         chosen_grade = data.get("grade", "")
+        chosen_class_name = data.get("class_name", "")
         detected_class = str(parsed.get("school_info", {}).get("class_name", "")).strip()
-        if chosen_grade in ["5", "6", "7", "8", "9", "10", "11"]:
+        if chosen_class_name:
+            cname = chosen_class_name
+        elif chosen_grade in ["5", "6", "7", "8", "9", "10", "11"]:
             if chosen_grade in detected_class:
                 cname = detected_class
             elif any(ch.isalpha() for ch in detected_class):
