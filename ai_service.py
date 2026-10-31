@@ -2,7 +2,8 @@ import os
 import json
 import logging
 import asyncio
-from typing import List, Dict, Any, Optional, Callable
+import re
+from typing import List, Dict, Any, Optional, Callable, Tuple
 import google.generativeai as genai
 from PIL import Image
 
@@ -30,7 +31,7 @@ class AIService:
     async def parse_journal_data(self, journal_path: str) -> Tuple[str, Dict[str, float]]:
         """
         Universal eMaktab journal parser:
-        Handles CSV, TSV, binary .xls (xlrd), real .xlsx (openpyxl), and Gemini Vision fallback for images/PDFs.
+        Fast magic-byte detection for binary .xls (xlrd), zip .xlsx (openpyxl), text/CSV, and Gemini Vision fallback for images/PDFs.
         Returns: (detected_class_name, {student_name: avg_grade})
         """
         if not journal_path or not os.path.exists(journal_path):
@@ -39,7 +40,87 @@ class AIService:
         detected_cname = "9-sinf"
         res = {}
 
-        # 1. Try reading as Text / CSV / TSV (eMaktab very often exports CSV with .xls extension)
+        # Read first 8 bytes for magic format detection
+        try:
+            with open(journal_path, "rb") as f:
+                magic = f.read(8)
+        except Exception:
+            magic = b""
+
+        # A. Binary .xls (BIFF8 / OLE2) -> xlrd
+        if magic.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1") or journal_path.lower().endswith(".xls"):
+            try:
+                import xlrd
+                book = xlrd.open_workbook(journal_path)
+                sheet = book.sheet_by_index(0)
+                for r in range(sheet.nrows):
+                    row_vals = [str(sheet.cell_value(r, c)).strip() for c in range(sheet.ncols)]
+                    row_str = " ".join(row_vals)
+                    if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
+                        m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
+                        if m:
+                            detected_cname = m.group(1).upper().replace("_", "-")
+
+                    if len(row_vals) >= 3:
+                        col0 = row_vals[0]
+                        col1 = row_vals[1]
+                        if re.match(r"^[0-9]+(?:\.[0-9]+)?$", col0) and len(col1.split()) >= 2 and not any(k in col1.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi"]):
+                            grades = []
+                            for val in row_vals[3:]:
+                                v = str(val).strip().replace(",", ".")
+                                if re.match(r"^[0-9]+(?:\.[0-9]+)?$", v):
+                                    num = float(v)
+                                    if 1.0 <= num <= 50.0:
+                                        grades.append(num)
+                            daily = [g for g in grades if g <= 10.0]
+                            if daily:
+                                avg = round(sum(daily) / len(daily), 1)
+                                res[col1] = avg
+                if len(res) >= 3:
+                    return (detected_cname, res)
+            except Exception as e_xlrd:
+                logger.warning(f"xlrd parse error: {e_xlrd}")
+
+        # B. Real .xlsx (ZIP PK) -> openpyxl
+        if magic.startswith(b"PK\x03\x04") or journal_path.lower().endswith(".xlsx"):
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(journal_path, data_only=True)
+                sheet = wb.active
+                for r in range(1, sheet.max_row + 1):
+                    row_vals = [str(sheet.cell(r, c).value or "").strip() for c in range(1, min(sheet.max_column + 1, 35))]
+                    row_str = " ".join(row_vals)
+                    if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
+                        m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
+                        if m:
+                            detected_cname = m.group(1).upper().replace("_", "-")
+
+                    if len(row_vals) >= 2:
+                        col0 = row_vals[0]
+                        col1 = row_vals[1] if len(row_vals) > 1 else ""
+                        name_candidate = col1 if len(col1.split()) >= 2 else col0
+                        if len(name_candidate.split()) >= 2 and not any(k in name_candidate.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi", "sinf", "tahlil"]):
+                            grades = []
+                            for c in range(2, min(sheet.max_column + 1, 35)):
+                                val = sheet.cell(r, c).value
+                                if val is not None:
+                                    try:
+                                        s = str(val).replace(",", ".").strip()
+                                        num = float(re.findall(r"^[0-9]+(?:\.[0-9]+)?", s)[0])
+                                        if 1.0 <= num <= 50.0:
+                                            grades.append(num)
+                                    except:
+                                        pass
+                            daily = [g for g in grades if g <= 10.0]
+                            if daily:
+                                avg = round(sum(daily) / len(daily), 1)
+                                res[name_candidate] = avg
+                if len(res) >= 3:
+                    return (detected_cname, res)
+            except Exception as e_openpyxl:
+                logger.warning(f"openpyxl parse error: {e_openpyxl}")
+
+        # C. Text / CSV / TSV
         try:
             with open(journal_path, "rb") as f:
                 raw_bytes = f.read(500000)
@@ -79,81 +160,10 @@ class AIService:
                             return (detected_cname, res)
                 except Exception:
                     pass
-        except Exception as e:
-            logger.warning(f"Text/CSV parse error: {e}")
+        except Exception as e_text:
+            logger.warning(f"Text/CSV parse error: {e_text}")
 
-        # 2. Try xlrd for binary .xls
-        try:
-            import xlrd
-            book = xlrd.open_workbook(journal_path)
-            sheet = book.sheet_by_index(0)
-            for r in range(sheet.nrows):
-                row_vals = [str(sheet.cell_value(r, c)).strip() for c in range(sheet.ncols)]
-                row_str = " ".join(row_vals)
-                if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
-                    m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
-                    if m:
-                        detected_cname = m.group(1).upper().replace("_", "-")
-
-                if len(row_vals) >= 3:
-                    col0 = row_vals[0]
-                    col1 = row_vals[1]
-                    if re.match(r"^[0-9]+(?:\.[0-9]+)?$", col0) and len(col1.split()) >= 2 and not any(k in col1.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi"]):
-                        grades = []
-                        for val in row_vals[3:]:
-                            v = str(val).strip().replace(",", ".")
-                            if re.match(r"^[0-9]+(?:\.[0-9]+)?$", v):
-                                num = float(v)
-                                if 1.0 <= num <= 50.0:
-                                    grades.append(num)
-                        daily = [g for g in grades if g <= 10.0]
-                        if daily:
-                            avg = round(sum(daily) / len(daily), 1)
-                            res[col1] = avg
-            if len(res) >= 3:
-                return (detected_cname, res)
-        except Exception:
-            pass
-
-        # 3. Try openpyxl for real .xlsx
-        try:
-            import openpyxl
-            wb = openpyxl.load_workbook(journal_path, data_only=True)
-            sheet = wb.active
-            for r in range(1, sheet.max_row + 1):
-                row_vals = [str(sheet.cell(r, c).value or "").strip() for c in range(1, min(sheet.max_column + 1, 35))]
-                row_str = " ".join(row_vals)
-                if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
-                    m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
-                    if m:
-                        detected_cname = m.group(1).upper().replace("_", "-")
-
-                if len(row_vals) >= 2:
-                    col0 = row_vals[0]
-                    col1 = row_vals[1] if len(row_vals) > 1 else ""
-                    name_candidate = col1 if len(col1.split()) >= 2 else col0
-                    if len(name_candidate.split()) >= 2 and not any(k in name_candidate.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi", "sinf", "tahlil"]):
-                        grades = []
-                        for c in range(2, min(sheet.max_column + 1, 35)):
-                            val = sheet.cell(r, c).value
-                            if val is not None:
-                                try:
-                                    s = str(val).replace(",", ".").strip()
-                                    num = float(re.findall(r"^[0-9]+(?:\.[0-9]+)?", s)[0])
-                                    if 1.0 <= num <= 50.0:
-                                        grades.append(num)
-                                except:
-                                    pass
-                        daily = [g for g in grades if g <= 10.0]
-                        if daily:
-                            avg = round(sum(daily) / len(daily), 1)
-                            res[name_candidate] = avg
-            if len(res) >= 3:
-                return (detected_cname, res)
-        except Exception:
-            pass
-
-        # 4. If image or PDF, fallback to Gemini Vision
+        # D. Image or PDF -> Gemini Vision
         prompt = """
 Ushbu eMaktab elektron jurnali sahifasidagi sinf nomi (masalan: 9-V yoki 9-A) va barcha o'quvchilarning ism-familiyasi hamda ularning darslardagi baholari o'rtachasini (1-10 ballik tizim bo'yicha) aniqlang.
 Quyidagi JSON formatida qaytaring:
