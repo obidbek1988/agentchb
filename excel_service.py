@@ -91,7 +91,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
         f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {bsb_number}-BSB ({max_score}ball)natijalari"
     )
 
-    ws.merge_cells("A1:J1")
+    ws.merge_cells("A1:I1")
     c_a1 = ws["A1"]
     c_a1.value = title_text
     c_a1.font = font_title
