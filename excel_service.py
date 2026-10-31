@@ -62,7 +62,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.title = "Лист1"
     ws.views.sheetView[0].showGridLines = True
 
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
@@ -195,8 +195,8 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.cell(row=sig_row, column=1, value=f"Fan o‘qituvchisi:____________________  {teacher_name}").font = font_bold
     ws.cell(row=sig_row+1, column=1, value=f"Metod birlashma rahbari:_______________ {head_teacher}").font = font_bold
 
-    # Printerdan chiqarganda to'liq jadval A dan J gacha chiroyli chiqsin
-    ws.print_area = f"A1:J{sig_row+1}"
+    # Printerdan chiqarganda aynan FOIZ ustunigacha (A dan I gacha) chiqsin
+    ws.print_area = f"A1:I{sig_row+1}"
 
     ws.column_dimensions["A"].width = 4.5
     ws.column_dimensions["B"].width = 25
@@ -224,7 +224,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 1
+    ws.page_setup.fitToHeight = 0
 
     ws.page_margins.left = 0.3
     ws.page_margins.right = 0.3
