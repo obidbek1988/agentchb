@@ -756,10 +756,9 @@ async def handle_grade_selection(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m1_journal_fixed)
     await callback.message.answer(
         f"✅ **{grade}-sinf Informatika 1-BSB ({crit_info['max_score']} ball)** tanlandi!\n\n"
-        f"💡 **Eng yaxshi va xatosiz usul:** eMaktabdan yuklangan **Excel (.xlsx yoki .xls) faylini** yuboring!\n"
-        f"• Excel fayl yuborilsa (hatto kirillcha bo‘lsa ham), **lotin alifbosida 0% imloviy xatosiz va 1 soniyada** mukammal tayyor bo‘ladi!\n\n"
-        f"📸 Agar Excel fayl bo‘lmasa, jurnalning **tiniq skrinshotini** yuboring (skrinshot xira bo‘lsa, ismlarda imloviy xatolik bo‘lishi mumkin).\n\n"
-        f"*(Mezon rasmi shart emas, bazadan avtomat olinadi!)*",
+        f"💡 **eMaktabdan yuklangan rasmiy Excel (.xlsx yoki .xls) faylini yuboring!**\n"
+        f"• Excel fayl yuborilsa, **lotin alifbosida 0% imloviy xatosiz va 1 soniyada** mukammal hisobot tayyor bo‘ladi!\n\n"
+        f"⚠️ _Skrinshot (rasm) qabul qilinmaydi, chunki rasmdagi baholarni AI xato o‘qib qo‘yishi mumkin._",
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
     )
@@ -833,32 +832,13 @@ async def mode1_fixed_back(message: types.Message, state: FSMContext):
 async def mode1_fixed_document(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
     
-    # PDF fayl bo'lsa
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m1_pdf_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        try:
-            status_pdf = await message.answer("📄 PDF qabul qilindi, sahifalari o‘qilmoqda...")
-            images = pdf_to_images(pdf_path)
-            data = await state.get_data()
-            j_list = data.get("journal_paths", [])
-            j_list.extend(images)
-            await state.update_data(journal_paths=j_list)
-            await status_pdf.delete()
-            await message.answer(
-                f"📥 **PDF dan {len(images)} ta sahifa muvaffaqiyatli olindi!**\n\n"
-                f"• Yana rasm/PDF bo‘lsa yuboring;\n"
-                f"• Tugagan bo‘lsa, **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-                reply_markup=get_action_keyboard(show_finish=True)
-            )
-        except Exception as e:
-            logger.error(f"PDF convert error: {e}")
-            await message.answer("❌ PDF faylni o‘qishda xatolik yuz berdi. Iltimos, rasm yoki Excel yuboring.")
-        return
-
     if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
-        await message.answer("Iltimos, eMaktab elektron jurnalini Excel (.xlsx, .xls) yoki PDF formatda yuboring.")
+        await message.answer(
+            "⚠️ **Iltimos, eMaktab elektron jurnalini rasmiy Excel (.xlsx yoki .xls) formatida yuboring!**\n\n"
+            "• Excel orqali hisobot **1 soniyada va 0% xato bilan** tayyor bo‘ladi.\n"
+            "*(PDF yoki rasmlar qabul qilinmaydi)*",
+            parse_mode="Markdown"
+        )
         return
 
     data = await state.get_data()
@@ -898,22 +878,13 @@ async def mode1_fixed_document(message: types.Message, state: FSMContext):
         await state.clear()
 
 @dp.message(BotStates.m1_journal_fixed, F.photo)
+@dp.message(BotStates.m1_journal, F.photo)
 async def mode1_fixed_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    jpath = f"temp/m1_j_fixed_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=jpath)
-
-    data = await state.get_data()
-    j_list = data.get("journal_paths", [])
-    j_list.append(jpath)
-    await state.update_data(journal_paths=j_list)
-
-    count = len(j_list)
     await message.answer(
-        f"📥 **{count}-jurnal rasmi qabul qilindi.**\n\n"
-        f"• Agar jurnal davomi bo‘lsa, keyingi rasmni yuboring.\n"
-        f"• Rasmlar tugagan bo‘lsa, pastdagi **'✅ Rasmlar tugadi, hisobotni tayyorlang!'** tugmasini bosing:",
-        reply_markup=get_action_keyboard(show_finish=True)
+        "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
+        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "Excel orqali hisobot **1 soniyada va 0% xato bilan** tayyor bo‘ladi!",
+        parse_mode="Markdown"
     )
 
 @dp.message(BotStates.m1_journal_fixed, F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
@@ -1460,9 +1431,10 @@ async def mode3_start(message: types.Message, state: FSMContext):
     await state.update_data(credit_type=credit_type)
     await state.set_state(BotStates.m3_journal)
     await message.answer(
-        "📊 **3-REJIM: CHSB (Ballar orqali hisobot)**\n\n"
-        "1-qadam: eMaktab elektron jurnali **Excel (.xlsx/.xls) faylini**, **PDF faylini** yoki **skrinshotini** (CHSB 40 ballik ustuni bilan) yuboring:\n"
-        "*(Excel fayl bo‘lsa 100% xatosiz va darhol tayyor bo‘ladi!)*",
+        "📊 **2-REJIM: CHSB (Ballar orqali hisobot)**\n\n"
+        "eMaktab elektron jurnali **Excel (.xlsx yoki .xls) faylini** (CHSB 40 ballik ustuni bilan) yuboring:\n\n"
+        "• Excel fayl yuborilsa, **0% xatosiz va 1 soniyada** mukammal tayyor bo‘ladi!\n"
+        "⚠️ _Skrinshot (rasm) qabul qilinmaydi._",
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
     )
@@ -1476,31 +1448,13 @@ async def mode3_journal_back(message: types.Message, state: FSMContext):
 async def mode3_journal_document(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
     
-    # If PDF
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m3_pdf_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        try:
-            status_pdf = await message.answer("📄 CHSB jurnali PDF qabul qilindi, sahifalari o‘qilmoqda...")
-            images = pdf_to_images(pdf_path)
-            jpath = images[0] if images else pdf_path
-            await state.update_data(journal_path=jpath)
-            await status_pdf.delete()
-            await state.set_state(BotStates.m3_criteria)
-            await message.answer(
-                "✅ Jurnal PDF qabul qilindi!\n\n"
-                "2-qadam: Ushbu CHSB ning **Baholash mezoni skrinshotini yoki PDF faylini** yuboring:",
-                reply_markup=get_action_keyboard(),
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            logger.error(f"Mode 3 PDF error: {e}")
-            await message.answer("❌ PDF faylni o‘qishda xatolik yuz berdi. Iltimos, rasm yoki Excel yuboring.")
-        return
-
     if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
-        await message.answer("Iltimos, eMaktab elektron jurnalini Excel (.xlsx, .xls) yoki PDF formatda yuboring.")
+        await message.answer(
+            "⚠️ **Iltimos, eMaktab elektron jurnalini Excel (.xlsx yoki .xls) formatida yuboring!**\n\n"
+            "Excel fayl 0% xatosiz va 1 soniyada tayyor bo‘ladi.\n"
+            "*(PDF yoki rasmlar qabul qilinmaydi)*",
+            parse_mode="Markdown"
+        )
         return
 
     status_msg = await message.answer(f"⏳ CHSB elektron jurnali ({fname}) to‘g‘ridan-to‘g‘ri o‘qilmoqda...")
@@ -1541,16 +1495,10 @@ async def mode3_journal_document(message: types.Message, state: FSMContext):
 
 @dp.message(BotStates.m3_journal, F.photo)
 async def mode3_journal(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    fpath = f"temp/m3_j_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=fpath)
-    await state.update_data(journal_path=fpath)
-
-    await state.set_state(BotStates.m3_criteria)
     await message.answer(
-        "✅ Jurnal qabul qilindi!\n\n"
-        "2-qadam: Ushbu CHSB ning **Baholash mezoni skrinshotini yoki PDF faylini** yuboring:",
-        reply_markup=get_action_keyboard(),
+        "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
+        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "Excel orqali hisobot **1 soniyada va 0% xato bilan** tayyor bo‘ladi!",
         parse_mode="Markdown"
     )
 
@@ -2596,16 +2544,16 @@ async def mode5_keys_photo(message: types.Message, state: FSMContext):
 async def ask_m5_journal(message: types.Message):
     msg_text = (
         "✅ **To‘g‘ri javoblar kaliti qabul qilindi!**\n\n"
-        "📍 **3-QADAM (4 tadan): eMaktab elektron jurnali faylini yoki rasmini yuboring**\n"
-        "*(Excel .xlsx, skrinshot fotosurati yoki PDF formatida)*\n\n"
-        "📊 **JURNAL UCHUN NAMUNA (Qanday moslashtiriladi?):**\n"
+        "📍 **3-QADAM (4 tadan): eMaktab elektron jurnali Excel faylini yuboring**\n"
+        "*(Faqat rasmiy Excel .xlsx yoki .xls formatida)*\n\n"
+        "📊 **BAHOGA MOSLASH MEZONI:**\n"
         "• Bot har bir o‘quvchining darsdagi baholari o‘rtachasini (1-10 ballik) hisoblaydi;\n"
         "• 50 ballik BSB bahosi shunga qatʼiy moslanadi:\n"
         "  - **9–10 baho (A'lo):** ➔ **43 dan 50 ballgacha**\n"
-        "  - **7–8 baho (Yaxshi):** ➔ **33 dan 42 ballgacha** (50 yozgan bo‘lsa ham shubhali ko‘chirish deb 33-42 ga tushiriladi)\n"
+        "  - **7–8 baho (Yaxshi):** ➔ **33 dan 42 ballgacha**\n"
         "  - **5–6 baho (Qoniqarli):** ➔ **15 dan 32 ballgacha**\n"
         "  - **1–4 baho (Qoniqarsiz):** ➔ **0 dan 12 ballgacha**\n\n"
-        "📸 _Iltimos, eMaktab jurnali Excel faylini yoki fotosuratini yuboring:_"
+        "💡 _Iltimos, eMaktabdan yuklangan rasmiy Excel (.xlsx yoki .xls) faylini yuboring:_"
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
 
@@ -2617,8 +2565,16 @@ async def mode5_journal_back(message: types.Message, state: FSMContext):
 @dp.message(BotStates.m5_journal, F.document)
 async def mode5_journal_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
+    if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
+        await message.answer(
+            "⚠️ **Iltimos, eMaktab elektron jurnalini Excel (.xlsx yoki .xls) formatida yuboring!**\n\n"
+            "Excel fayl 0% xatosiz va tez tayyor bo‘ladi.",
+            parse_mode="Markdown"
+        )
+        return
+
     os.makedirs("temp", exist_ok=True)
-    ext = ".xlsx" if fname.endswith(".xlsx") else (".xls" if fname.endswith(".xls") else ".pdf")
+    ext = ".xls" if fname.endswith(".xls") else ".xlsx"
     jpath = f"temp/m5_j_{message.from_user.id}_{message.message_id}{ext}"
     await bot.download(message.document, destination=jpath)
 
@@ -2632,25 +2588,16 @@ async def mode5_journal_doc(message: types.Message, state: FSMContext):
         await ask_m5_works(message)
     except Exception as e:
         logger.error(f"Mode 5 Journal parse error: {e}")
-        await status_j.edit_text("❌ Jurnalni o‘qishda xatolik yuz berdi. Iltimos, Excel yoki aniq rasm yuboring.")
+        await status_j.edit_text("❌ Jurnalni o‘qishda xatolik yuz berdi. Iltimos, eMaktab Excel faylini to‘g‘ri formatda yuboring.")
 
 @dp.message(BotStates.m5_journal, F.photo)
 async def mode5_journal_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    jpath = f"temp/m5_j_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=jpath)
-
-    status_j = await message.answer("⏳ Jurnal skrinshoti o‘qilmoqda...")
-    try:
-        averages = await ai_service.parse_journal_averages(jpath)
-        await state.update_data(journal_path=jpath, journal_averages=averages)
-        await status_j.delete()
-        await state.set_state(BotStates.m5_works)
-        await message.answer(f"✅ Jurnaldan {len(averages)} nafar o‘quvchining dars o‘rtacha baholari aniqlandi!")
-        await ask_m5_works(message)
-    except Exception as e:
-        logger.error(f"Mode 5 Journal photo error: {e}")
-        await status_j.edit_text("❌ Jurnal rasmini o‘qishda xatolik yuz berdi. Excel formatda yuborish tavsiya etiladi.")
+    await message.answer(
+        "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
+        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "Excel orqali hisobot 1 soniyada va 0% xato bilan tayyor bo‘ladi!",
+        parse_mode="Markdown"
+    )
 
 async def ask_m5_works(message: types.Message):
     msg_text = (
@@ -3114,8 +3061,18 @@ async def mode6_journal_back(message: types.Message, state: FSMContext):
 @dp.message(BotStates.m6_journal, F.document)
 async def mode6_journal_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
+    if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
+        await message.answer(
+            "⚠️ **Iltimos, eMaktab elektron jurnalini Excel (.xlsx yoki .xls) formatida yuboring!**\n\n"
+            "Excel fayl 0% xatosiz va 1 soniyada tayyor bo‘ladi.\n"
+            "*(PDF yoki rasmlar qabul qilinmaydi)*",
+            parse_mode="Markdown"
+        )
+        return
+
     os.makedirs("temp", exist_ok=True)
-    jpath = f"temp/m6_j_{message.from_user.id}_{message.message_id}_{message.document.file_name}"
+    ext = ".xls" if fname.endswith(".xls") else ".xlsx"
+    jpath = f"temp/m6_j_{message.from_user.id}_{message.message_id}{ext}"
     await bot.download(message.document, destination=jpath)
 
     status_msg = await message.answer("⏳ **Jurnal o‘qilmoqda va dars baholariga mos CHSB hisoboti tayyorlanmoqda...**")
@@ -3164,47 +3121,12 @@ async def mode6_journal_doc(message: types.Message, state: FSMContext):
 
 @dp.message(BotStates.m6_journal, F.photo)
 async def mode6_journal_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    jpath = f"temp/m6_j_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=jpath)
-
-    status_msg = await message.answer("⏳ **Jurnal fotosurati tahlil qilinmoqda va CHSB hisoboti tayyorlanmoqda...**")
-    try:
-        detected_cname, averages = await ai_service.parse_journal_data(jpath)
-        if not averages:
-            await status_msg.edit_text("❌ Jurnal fotosuratidan baholarni aniqlab bo‘lmadi. eMaktabdan Excel formatida yuklash tavsiya etiladi.")
-            return
-
-        data = await state.get_data()
-        lang = data.get("lang", "uz")
-        subject = data.get("subject", "Informatika")
-        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname, subject=subject, lang=lang)
-        cname = detected_cname
-
-        out_excel = f"temp/{message.from_user.id}_{cname}_chsb_bahoga_moslangan.xlsx"
-        build_chsb_excel(report_data, out_excel)
-
-        doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_bahoga_moslangan_hisobot.xlsx")
-        cap = (
-            f"🎉 **{cname} o‘quvchilari darsdagi baholariga to‘liq moslashtirildi va CHSB hisoboti tayyorlandi!**\n\n"
-            f"• 👥 **Jami o‘quvchilar:** {len(averages)} nafar\n"
-            f"• 9–10 baho ➔ 35–40 ball\n"
-            f"• 7–8 baho ➔ 27–34 ball\n"
-            f"• 5–6 baho ➔ 13–26 ball\n"
-            f"• Har bir o‘quvchi qoshida to‘g‘ri/xatolar hisobotda ko‘rsatilgan."
-            f"{FEEDBACK_NOTE}"
-        )
-        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
-        await send_to_archive(out_excel, f"📁 Bahoga moslangan CHSB: {cname} | @{message.from_user.username or message.from_user.id}")
-        await status_msg.delete()
-
-        data = await state.get_data()
-        credit_type = data.get("credit_type", "paid")
-        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
-        await state.clear()
-    except Exception as e:
-        logger.error(f"Mode 6 Photo Error: {e}", exc_info=True)
-        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
+    await message.answer(
+        "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
+        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "Excel orqali hisobot 1 soniyada va 0% xato bilan tayyor bo‘ladi!",
+        parse_mode="Markdown"
+    )
 
 
 # ==================== ADMIN UCHUN MAXSUS BUYRUQLAR ====================
