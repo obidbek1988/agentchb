@@ -56,10 +56,10 @@ def get_main_keyboard(user_id: int = 0, is_admin: bool = False):
         kb = [
             [
                 KeyboardButton(text="1️⃣ BSB (Ballar orqali)"),
-                KeyboardButton(text="2️⃣ BSB (Ishlarni tekshirish)")
+                KeyboardButton(text="2️⃣ CHSB (Ballar orqali)")
             ],
             [
-                KeyboardButton(text="3️⃣ CHSB (Ballar orqali)"),
+                KeyboardButton(text="3️⃣ BSB (Ishlarni tekshirish)"),
                 KeyboardButton(text="4️⃣ CHSB (Testlarni tekshirish)")
             ],
             [
@@ -82,10 +82,10 @@ def get_main_keyboard(user_id: int = 0, is_admin: bool = False):
         kb = [
             [
                 KeyboardButton(text="1️⃣ BSB (Ballar orqali)"),
-                KeyboardButton(text="2️⃣ BSB (Ishlarni tekshirish)")
+                KeyboardButton(text="2️⃣ CHSB (Ballar orqali)")
             ],
             [
-                KeyboardButton(text="3️⃣ CHSB (Ballar orqali)"),
+                KeyboardButton(text="3️⃣ BSB (Ishlarni tekshirish)"),
                 KeyboardButton(text="4️⃣ CHSB (Testlarni tekshirish)")
             ],
             [
@@ -677,12 +677,14 @@ async def start_cmd(message: types.Message, state: FSMContext):
         welcome_text = (
             "Assalomu alaykum! 🎓 **BSB va CHSB Hisobot Agentiga** xush kelibsiz.\n\n"
             "Quyidagi imkoniyatlardan birini tanlang:\n\n"
-            "1️⃣ **BSB (Ballar orqali):** eMaktab jurnali va mezon rasmidan tayyor hisobot qilish.\n"
-            "2️⃣ **BSB (Ishlarni tekshirish):** O‘quvchilar yozma ishlarini AI orqali tekshirib, hisobot tuzish.\n"
-            "3️⃣ **CHSB (Ballar orqali):** eMaktab CHSB jurnali bo‘yicha (B-Q-M) hisobot qilish.\n"
-            "4️⃣ **CHSB (Testlarni tekshirish):** Test to‘g‘ri kaliti va o‘quvchi javoblari varaqasini tekshirish.\n"
-            "5️⃣ **BSB (Bahoga moslash):** O‘quvchining darsdagi bahosiga qarab BSB ballini avtomatik moslashtirish.\n"
-            "6️⃣ **CHSB (Bahoga moslash):** O‘quvchining darsdagi bahosiga qarab CHSB test ballini avtomatik moslashtirish."
+            "⬅️ **BSB bo‘limi (Chap tomonda):**\n"
+            "1️⃣ **BSB (Ballar orqali):** eMaktab jurnali va mezon rasmidan hisobot qilish.\n"
+            "3️⃣ **BSB (Ishlarni tekshirish):** O‘quvchilar yozma ishlarini AI orqali tekshirish.\n"
+            "5️⃣ **BSB (Bahoga moslash):** Darsdagi o‘rtacha bahosiga moslab BSB ball qo‘yish.\n\n"
+            "➡️ **CHSB bo‘limi (O‘ng tomonda):**\n"
+            "2️⃣ **CHSB (Ballar orqali):** eMaktab CHSB jurnali bo‘yicha hisobot qilish.\n"
+            "4️⃣ **CHSB (Testlarni tekshirish):** Test to‘g‘ri kaliti va varaqalarini tekshirish.\n"
+            "6️⃣ **CHSB (Bahoga moslash):** Darsdagi o‘rtacha bahosiga moslab CHSB ball qo‘yish."
         )
     else:
         welcome_text = (
@@ -1098,6 +1100,7 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 2-REJIM: BSB ISHLARNI TEKSHIRISH ====================
+@dp.message(F.text.contains("3️⃣ BSB (Ishlarni tekshirish)"))
 @dp.message(F.text.contains("2️⃣ BSB (Ishlarni tekshirish)"))
 @dp.message(F.text.contains("BSB (Ishlarni tekshirish)"))
 async def mode2_start(message: types.Message, state: FSMContext):
@@ -1377,6 +1380,7 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
         await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
 
 # ==================== 3-REJIM: CHSB BALLAR ORQALI ====================
+@dp.message(F.text.contains("2️⃣ CHSB (Ballar orqali)"))
 @dp.message(F.text.contains("3️⃣ CHSB (Ballar orqali)"))
 @dp.message(F.text.contains("CHSB (Ballar orqali)"))
 async def mode3_start(message: types.Message, state: FSMContext):
@@ -1564,6 +1568,7 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
 
 # ==================== 4-REJIM: CHSB TESTLARNI TEKSHIRISH ====================
 
+@dp.message(F.text.contains("4️⃣ CHSB (Testlarni tekshirish)"))
 @dp.message(F.text.contains("CHSB (Testlarni tekshirish)"))
 @dp.message(F.text.contains("Testlarni tekshirish"))
 async def mode4_start(message: types.Message, state: FSMContext):
@@ -2357,8 +2362,8 @@ async def mode5_finish(message: types.Message, state: FSMContext, user_id: int =
 
 # ==================== 6-REJIM: CHSB BAHOGA MOSLASH (JURNALDAN O'QUVCHI ISHISIZ) ====================
 
+@dp.message(F.text.contains("6️⃣ CHSB (Bahoga moslash)"))
 @dp.message(F.text.contains("CHSB (Bahoga moslash)"))
-@dp.message(F.text.contains("Bahoga moslash"))
 async def mode6_start(message: types.Message, state: FSMContext):
     can_proceed, credit_type = await check_access_and_notify(message)
     if not can_proceed:
@@ -2944,12 +2949,8 @@ async def admin_vip_add_input(message: types.Message, state: FSMContext):
                 uid,
                 "🎉 **Tabriklaymiz! Sizga admin tomonidan to‘liq imkoniyatlar (VIP) ochildi!**\n\n"
                 "Endi siz BSB va CHSB bo‘yicha barcha 6 ta rejimdan bemalol foydalanishingiz mumkin:\n"
-                "1️⃣ BSB (Ballar orqali)\n"
-                "2️⃣ BSB (Ishlarni tekshirish)\n"
-                "3️⃣ CHSB (Ballar orqali)\n"
-                "4️⃣ CHSB (Testlarni tekshirish)\n"
-                "5️⃣ BSB (Bahoga moslash)\n"
-                "6️⃣ CHSB (Bahoga moslash)\n\n"
+                "⬅️ BSB (Chap): 1️⃣ BSB (Ballar), 3️⃣ BSB (Ishlar), 5️⃣ BSB (Bahoga moslash)\n"
+                "➡️ CHSB (O‘ng): 2️⃣ CHSB (Ballar), 4️⃣ CHSB (Testlar), 6️⃣ CHSB (Bahoga moslash)\n\n"
                 "Pastdagi menyu yangilandi! 👇",
                 reply_markup=get_main_keyboard(uid)
             )
@@ -3056,12 +3057,8 @@ async def cmd_add_vip(message: types.Message):
                 target_uid,
                 "🎉 **Tabriklaymiz! Sizga admin tomonidan to‘liq imkoniyatlar (VIP) ochildi!**\n\n"
                 "Endi siz BSB va CHSB bo‘yicha barcha 6 ta rejimdan bemalol foydalanishingiz mumkin!\n"
-                "1️⃣ BSB (Ballar orqali)\n"
-                "2️⃣ BSB (Ishlarni tekshirish)\n"
-                "3️⃣ CHSB (Ballar orqali)\n"
-                "4️⃣ CHSB (Testlarni tekshirish)\n"
-                "5️⃣ BSB (Bahoga moslash)\n"
-                "6️⃣ CHSB (Bahoga moslash)\n\n"
+                "⬅️ BSB (Chap): 1️⃣ BSB (Ballar), 3️⃣ BSB (Ishlar), 5️⃣ BSB (Bahoga moslash)\n"
+                "➡️ CHSB (O‘ng): 2️⃣ CHSB (Ballar), 4️⃣ CHSB (Testlar), 6️⃣ CHSB (Bahoga moslash)\n\n"
                 "Pastdagi menyu yangilandi! 👇",
                 reply_markup=get_main_keyboard(target_uid)
             )
