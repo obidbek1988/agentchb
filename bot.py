@@ -2412,16 +2412,22 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
             await message.answer(txt)
 
     try:
+        chosen_grade = data.get("grade", "9")
+        chosen_class_name = data.get("class_name", "")
+        subject = data.get("subject", "Informatika")
+        lang = data.get("lang", "uz")
+
         parsed = await ai_service.evaluate_test_answers(
             keys_input, tlist,
             progress_callback=update_progress,
             batch_callback=send_batch_test_results,
             is_text_key=is_text_key,
             criteria_input=crit_input,
-            is_text_criteria=is_text_crit
+            is_text_criteria=is_text_crit,
+            grade=chosen_grade,
+            subject=subject,
+            lang=lang
         )
-        chosen_grade = data.get("grade", "")
-        chosen_class_name = data.get("class_name", "")
         detected_class = str(parsed.get("school_info", {}).get("class_name", "")).strip()
         if chosen_class_name:
             cname = chosen_class_name
@@ -2442,6 +2448,7 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
         subject = data.get("subject", "Informatika")
         parsed["school_info"]["subject"] = subject
         parsed["school_info"]["lang"] = lang
+        parsed["school_info"]["class_name"] = cname
         if lang == "ru":
             parsed["school_info"]["subject"] = "Информатика"
             parsed["school_info"]["teacher_name"] = "Кабилов Обиджон"

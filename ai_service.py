@@ -13,6 +13,128 @@ from queue_manager import queue_manager
 
 logger = logging.getLogger(__name__)
 
+
+def parse_keys_string(keys_str: Any) -> Dict[int, str]:
+    res = {}
+    if not keys_str:
+        return res
+    cyr_map = {'А': 'A', 'В': 'B', 'С': 'C', 'Д': 'D', 'а': 'A', 'в': 'B', 'с': 'C', 'д': 'D'}
+    pairs = re.findall(r'(\d+)\s*[-.:)]\s*([A-Za-zА-Яа-я])', str(keys_str))
+    for q_num, ans in pairs:
+        ch = ans.upper()
+        ch = cyr_map.get(ch, ch)
+        res[int(q_num)] = ch
+    return res
+
+def get_chsb_scoring_config(grade: str = "9", subject: str = "Informatika", lang: str = "uz", custom_keys: str = "", custom_criteria: str = "") -> Dict[str, Any]:
+    from criteria_store import get_chsb_for_grade
+    cfg = get_chsb_for_grade(grade, subject=subject, lang=lang) or {}
+
+    key_dict = dict(cfg.get("key_dict", {}))
+    if custom_keys and isinstance(custom_keys, str):
+        parsed = parse_keys_string(custom_keys)
+        if parsed:
+            key_dict.update(parsed)
+
+    if not key_dict:
+        # Standard fallback for 9-sinf Informatika
+        key_dict = {1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C', 6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B', 11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'}
+
+    b_q = list(cfg.get("b_questions", []))
+    q_q = list(cfg.get("q_questions", []))
+    m_q = list(cfg.get("m_questions", []))
+
+    if not b_q or not q_q or not m_q:
+        b_q = [1, 4, 7]
+        q_q = [2, 3, 5, 6, 8, 9, 10, 11, 12, 14]
+        m_q = [13, 15]
+
+    return {
+        "key_dict": key_dict,
+        "b_questions": b_q,
+        "q_questions": q_q,
+        "m_questions": m_q,
+        "total_questions": cfg.get("total_questions", 15),
+        "max_score": cfg.get("max_score", 40)
+    }
+
+def score_student_answers(raw_answers: Any, scoring_config: Dict[str, Any]) -> Dict[str, Any]:
+    key_dict = scoring_config["key_dict"]
+    b_q = scoring_config["b_questions"]
+    q_q = scoring_config["q_questions"]
+    m_q = scoring_config["m_questions"]
+    total_q = scoring_config.get("total_questions", 15)
+
+    ans_dict = {}
+    if isinstance(raw_answers, dict):
+        cyr_map = {'А': 'A', 'В': 'B', 'С': 'C', 'Д': 'D', 'а': 'A', 'в': 'B', 'с': 'C', 'д': 'D'}
+        for k, v in raw_answers.items():
+            try:
+                ch = str(v).strip().upper()
+                ch = cyr_map.get(ch, ch)
+                ans_dict[int(k)] = ch
+            except:
+                pass
+    elif isinstance(raw_answers, (str, list)):
+        ans_dict = parse_keys_string(raw_answers)
+
+    b_score = 0.0
+    q_score = 0.0
+    m_score = 0.0
+    correct_count = 0
+    wrong_q_list = []
+    display_parts = []
+
+    for q in range(1, total_q + 1):
+        c_ans = key_dict.get(q, "").upper()
+        s_ans = ans_dict.get(q, "").upper()
+
+        is_correct = bool(s_ans and c_ans and s_ans == c_ans)
+        if is_correct:
+            correct_count += 1
+            if q in b_q:
+                b_score += 2.0
+            elif q in q_q:
+                q_score += 2.4
+            elif q in m_q:
+                m_score += 5.0
+            else:
+                q_score += 2.4
+            display_parts.append(f"{q}-{s_ans}")
+        else:
+            wrong_q_list.append(q)
+            shown_ans = s_ans if s_ans else "?"
+            display_parts.append(f"{q}-{shown_ans} ❌")
+
+    b_score = round(b_score, 1)
+    q_score = round(q_score, 1)
+    m_score = round(m_score, 1)
+    tot = round(b_score + q_score + m_score, 1)
+
+    tot_val = int(tot) if tot.is_integer() else tot
+    b_val = int(b_score) if b_score.is_integer() else b_score
+    q_val = int(q_score) if q_score.is_integer() else q_score
+    m_val = int(m_score) if m_score.is_integer() else m_score
+
+    wrong_count = len(wrong_q_list)
+    if wrong_count == 0:
+        note = f"{correct_count} ta to‘g‘ri (100% a‘lo natija)"
+    elif wrong_count == 1:
+        note = f"{correct_count} ta to‘g‘ri, 1 ta xato ({wrong_q_list[0]}-test)"
+    else:
+        wr_str = ", ".join(str(x) for x in wrong_q_list)
+        note = f"{correct_count} ta to‘g‘ri, {wrong_count} ta xato ({wr_str}-testlar)"
+
+    return {
+        "total_score": tot_val,
+        "task_scores": [b_val, q_val, m_val],
+        "note": note,
+        "keys_str": ", ".join(display_parts),
+        "correct_count": correct_count,
+        "wrong_count": wrong_count,
+        "wrong_questions": wrong_q_list
+    }
+
 class AIService:
     def __init__(self):
         self.keys = GEMINI_KEYS
@@ -503,8 +625,16 @@ Javob FAQAT sof JSON bo'lsin.
 """
         return self._send_prompt_to_gemini(prompt, [journal_img_path, criteria_img_path])
 
-    # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
-    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
+    # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: Python 100% matematik aniq hisoblaydi!)
+    async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False, grade: str = "9", subject: str = "Informatika", lang: str = "uz") -> Dict[str, Any]:
+        scoring_cfg = get_chsb_scoring_config(
+            grade=grade,
+            subject=subject,
+            lang=lang,
+            custom_keys=keys_input if is_text_key else "",
+            custom_criteria=criteria_input if is_text_criteria else ""
+        )
+
         batch_size = 4
         all_students = []
         final_info = {}
@@ -517,15 +647,37 @@ Javob FAQAT sof JSON bo'lsin.
                 percent = int((current_count / total_tests) * 100)
                 await progress_callback(f"⏳ Testlar tekshirilmoqda: {current_count} / {total_tests} ta o‘quvchi ({percent}%)...")
 
-            res = await queue_manager.execute_task(self._call_eval_tests_vision, keys_input, batch, start_tr=i+1, is_text_key=is_text_key, criteria_input=criteria_input, is_text_criteria=is_text_criteria, journal_averages=journal_averages, is_adjusted=is_adjusted)
+            res = await queue_manager.execute_task(
+                self._call_eval_tests_vision,
+                keys_input,
+                batch,
+                start_tr=i+1,
+                is_text_key=is_text_key,
+                criteria_input=criteria_input,
+                is_text_criteria=is_text_criteria,
+                journal_averages=journal_averages,
+                is_adjusted=is_adjusted
+            )
             if not final_info and "school_info" in res:
                 final_info = res["school_info"]
 
-            new_students = res.get("students", [])
-            all_students.extend(new_students)
-            if batch_callback and new_students:
+            raw_students = res.get("students", [])
+            processed_students = []
+            for s_idx, st in enumerate(raw_students):
+                raw_answers = st.get("answers") or st.get("keys_str") or st.get("student_keys") or {}
+                scored = score_student_answers(raw_answers, scoring_cfg)
+                
+                st.update(scored)
+                st["tr"] = len(all_students) + s_idx + 1
+                name = str(st.get("name", "")).strip()
+                if not name or name.lower() in ["o'quvchi", "o‘quvchi", "noma'lum", "f.i.o"]:
+                    st["name"] = f"O‘quvchi {st['tr']}"
+                processed_students.append(st)
+
+            all_students.extend(processed_students)
+            if batch_callback and processed_students:
                 try:
-                    await batch_callback(new_students, current_count, total_tests)
+                    await batch_callback(processed_students, current_count, total_tests)
                 except Exception as be:
                     logger.warning(f"Batch test callback error: {be}")
 
@@ -538,94 +690,43 @@ Javob FAQAT sof JSON bo'lsin.
 
     def _call_eval_tests_vision(self, keys_input: str, student_test_img_paths: List[str], start_tr: int = 1, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
         all_imgs = []
-
-        # 1. Criteria description
-        if criteria_input:
-            if is_text_criteria:
-                crit_desc = f"Baholash mezoni:\n{criteria_input}"
-            elif os.path.exists(criteria_input):
-                all_imgs.append(criteria_input)
-                crit_desc = f"{len(all_imgs)}-rasm: CHSB Baholash mezoni jadvali."
-            else:
-                crit_desc = f"Baholash mezoni: {criteria_input}"
-        else:
-            crit_desc = "Standart CHSB mezoni (jami 15 ta test): (B) Bilish 1-5 savollar (6 ball), (Q) Qo'llash 6-12 savollar (24 ball), (M) Mulohaza 13-15 savollar (10 ball). Jami: 40 ball."
-
-        # 2. Key description
-        if is_text_key:
-            key_desc = f"To'g'ri javoblar kaliti:\n{keys_input}"
-        elif keys_input and os.path.exists(keys_input):
-            all_imgs.append(keys_input)
-            key_desc = f"{len(all_imgs)}-rasm: CHSB test savollarining to'g'ri javoblari kaliti (masalan: 1-A, 2-D, 3-C...)."
-        else:
-            key_desc = f"To'g'ri javoblar kaliti: {keys_input}"
-
         all_imgs.extend(student_test_img_paths)
 
-        adj_desc = ""
-        if is_adjusted and journal_averages:
-            avg_lines = [f"• {name}: dars o'rtacha bahosi {score}" for name, score in list(journal_averages.items())[:35]]
-            adj_desc = f"""
-MUHIM VAZIFA — DARSDAGI O'RTACHA BAHOGA MOSLASHTIRISH:
-O'quvchilarning eMaktab jurnali bo'yicha darslardagi o'rtacha baholari:
-{chr(10).join(avg_lines)}
-
-40 ballik CHSB (15 ta test) baholash qoidasi:
-1) Jurnaldagi o'rtacha bahosi 9.0–10.0 (5 baho, a'lochi) bo'lsa -> CHSB bali 35 dan 40 ballgacha berilsin;
-2) Jurnaldagi o'rtacha bahosi 7.0–8.9 (4 baho, yaxshi) bo'lsa -> CHSB bali 27 dan 34 ballgacha berilsin (agar 40 ball yechgan bo'lsa ham, ko'chirish ehtimoli inobatga olinib 27-34 ball oralig'iga moslansin va izohda qaysi testlar xato qilib ko'rsatilgani yozilsin!);
-3) Jurnaldagi o'rtacha bahosi 5.0–6.9 (3 baho, qoniqarli) bo'lsa -> CHSB bali 13 dan 26 ballgacha berilsin;
-4) Jurnaldagi o'rtacha bahosi 0–4.9 (2 baho, qoniqarsiz) bo'lsa -> CHSB bali 0 dan 12 ballgacha berilsin.
-
-Har bir o'quvchi uchun 'note' (Izoh) ustuniga:
-"Dars o'rtachasi: X.X (Y baho). CHSB bali: Z ballga moslashtirildi. N ta to'g'ri, M ta xato (falon testlar)."
-"""
-
         prompt = f"""
-Siz test javoblarini tekshiruvchi mutaxassissiz.
-{crit_desc}
-{key_desc}
-{adj_desc}
-Keyingi rasmlar: O'quvchilarning belgilagan test javoblari varaqalari rasmlari.
+Siz test javoblarini o'quvchi mutaxassissiz.
+Rasmlar: O'quvchilarning belgilagan test javoblari varaqalari rasmlari.
 
-TEST JAVOBLARINI O'QISH VA BAHOLASHNING QAT'IY QOIDALARI:
-1. JAVOBLAR JADVALI (ORQADAGI KALIT) USTUVOR (PRIORITET 1):
-   Agar test varaqasida (ayniqsa varaqning orqa tomonida yoki pastki qismida) o'quvchi to'ldirgan 1 dan 15 gacha bo'lgan Javoblar jadvali / kalit matrisi mavjud bo'lsa — BIRINCHI NAVBATDA o'sha jadvaldagi javob harflarini (A, B, C, D) asosiy javob sifatida oling!
-2. TEST SAVOLLARIDAGI BELGILAR (PRIORITET 2):
-   Agar javoblar jadvali to'ldirilmagan, bo'sh yoki mavjud bo'lmasa — faqat shundagina savollarning o'zida doiraga olingan yoki belgilangan variantlarni oling.
-3. KO'P VARAQLI ISHLARNI BIRLASHTIRISH (1-8 VARAQ):
-   Bitta o'quvchining ishi 1 ta, 2 ta, 4 ta yoki 8 tagacha rasmlardan iborat bo'lishi mumkin (masalan, oldi va orqa tomoni yoki bir nechta sahifa).
-   O'quvchi F.I.O odatda 1-sahifada bo'ladi. Keyingi sahifalarda yangi ism bo'lmasa, ularni yangi o'quvchi deb ochmang — oldingi o'quvchining davomi deb birlashtiring.
-4. HAQIQATGA MOSLIK (40 dan 40 chiqarmaslik):
-   Bahoga moslash rejimida hech qachon 40 dan 40 (100%) ball chiqarmang. A'lochi o'quvchilarda ham kamida 1-2 ta xato bo'lsin (35-38 ball oralig'i).
+DIQQAT — ASOSIY VAZIFALAR:
+1. O'QUVCHINING ISM-FAMILIYASI (F.I.O):
+   Har bir test varaqasidagi "O'quvchining familiyasi, ismi" yoki "F.I.O" yozilgan joydan o'quvchining haqiqiy Ism va Familiyasini juda aniq o'qing (masalan: Абдувоҳидова Мубина, Абдулахаев Шердорбек, Болтабоев Фирдавс...).
+   - Qo'lyozma harflarni sinchiklab tahlil qilib to'liq ism-familiyani yozing.
+   - Hech qachon "O'quvchi 1", "O'quvchi 2" yoki "O'quvchi (2-varaq)" deb YOZMANG! Har bir varaqada yozilgan ismni aniqlang.
 
-Vazifangiz:
-Har bir o'quvchining belgilagan javoblarini to'g'ri kalit va baholash mezoni bilan yuqoridagi qoidalar asosida tekshiring:
-- O'quvchi F.I.O;
-- To'g'ri topilgan testlar ballarini hisoblang: (B) Bilish, (Q) Qo'llash, (M) Mulohaza mezonlari bo'yicha ajrating;
-- Jami to'plagan ballini hisoblang (maksimal 40 ball, hech qachon 40/40 bo'lmasin);
-- Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: nechta to'g'ri, nechta xato va qaysi savollarda adashgani (masalan: "13 to'g'ri, 2 xato (4, 15-testlar)");
-- Har bir o'quvchi belgilagan test javoblari kalitini 'keys_str' qatoriga yozing (masalan: "1-C, 2-A, 3-D, 4-A ❌, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-B ❌", xato javoblarga ❌ qo'ying);
-- Tartib raqami (tr) {start_tr} dan boshlansin.
+2. O'QUVCHI BELGILAGAN TEST JAVOBLARI (1 dan 15 gacha):
+   Har bir savol uchun o'quvchi qaysi variantni (A, B, C, D) belgilaganini aniqlang:
+   - Agar test varaqasida "Javoblar jadvali" (kalit matrisi: 1-A, 2-B...) to'ldirilgan bo'lsa — birinchi navbatda o'sha jadvaldagi javob harflarini oling!
+   - Agar javoblar jadvali bo'lmasa, test savollarining o'zida doiraga olingan yoki belgilangan variantlarni oling.
+   - O'quvchi qog'ozga qaysi harfni belgilagan bo'lsa, AYNAN O'SHANI xolis va haqqoniy yozing. Hech qanday soxta xato to'qimang! Agar barcha 15 ta test to'g'ri belgilangan bo'lsa, barchasini to'g'ri yozing (hech qanday sun'iy ball cheklovi yo'q, halol baholanadi).
+   - Agar biror savol belgilanmagan bo'lsa, bo'sh qoldiring ("").
+
+3. VARAQLAR:
+   Har bir alohida test varaqasi 1 nafar o'quvchiga tegishli.
 
 Quyidagi JSON formatida qaytaring:
 {{
   "school_info": {{
-    "class_name": "9-B",
-    "subject": "Informatika",
-    "quarter": 2,
-    "chsb_number": 2,
-    "max_score": 40,
-    "teacher_name": "Qobilov Obidjon",
-    "head_teacher": "Mahmudova Dilfuzaxon"
+    "class_name": "9-G",
+    "subject": "Informatika"
   }},
   "students": [
     {{
       "tr": {start_tr},
-      "name": "O'quvchi F.I.O",
-      "total_score": 34,
-      "task_scores": [6, 20, 8],
-      "note": "12 to'g'ri, 3 xato (4, 9, 14-testlar)",
-      "keys_str": "1-C, 2-A, 3-D, 4-A ❌, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-B ❌"
+      "name": "Абдувоҳидова Мубина",
+      "answers": {{
+        "1": "C", "2": "A", "3": "D", "4": "C", "5": "C",
+        "6": "A", "7": "C", "8": "D", "9": "A", "10": "C",
+        "11": "B", "12": "D", "13": "C", "14": "A", "15": "C"
+      }}
     }}
   ]
 }}
