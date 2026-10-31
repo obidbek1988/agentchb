@@ -195,7 +195,7 @@ Javob FAQAT sof JSON bo'lsin.
         _, averages = await self.parse_journal_data(journal_path)
         return averages
 
-    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf", lang: str = "uz") -> Dict[str, Any]:
+    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf", subject: str = "Informatika", lang: str = "uz") -> Dict[str, Any]:
         """
         Darsdagi baholarga qarab 40 ballik CHSB hisobotini o'quvchi ishisiz generatsiya qiladi.
         O'zbek va Rus sinflari uchun to'liq moslangan.
@@ -207,7 +207,8 @@ Javob FAQAT sof JSON bo'lsin.
         if "рус" in class_name.lower() or "rus" in class_name.lower():
             lang = "ru"
 
-        chsb_cfg = get_chsb_for_grade(class_name, lang=lang) or get_chsb_for_grade("9", lang=lang)
+        subject_name = school_info_subject if "school_info_subject" in locals() else "Informatika"
+        chsb_cfg = get_chsb_for_grade(class_name, subject=subject, lang=lang) or get_chsb_for_grade("9", subject=subject, lang=lang)
         b_q = chsb_cfg.get("b_questions", [1, 4, 7])
         q_q = chsb_cfg.get("q_questions", [2, 3, 5, 6, 8, 9, 10, 11, 12, 14])
         m_q = chsb_cfg.get("m_questions", [13, 15])
@@ -304,7 +305,7 @@ Javob FAQAT sof JSON bo'lsin.
         return {
             "school_info": {
                 "class_name": class_name if lang == "ru" else to_uzbek_latin(class_name),
-                "subject": "Информатика" if lang == "ru" else "Informatika",
+                "subject": ("Информатика" if lang == "ru" else "Informatika") if "adab" not in subject.lower() else "Adabiyot",
                 "quarter": 1,
                 "chsb_number": 1,
                 "max_score": 40,

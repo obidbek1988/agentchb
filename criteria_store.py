@@ -416,8 +416,101 @@ INFORMATIKA_1_CHORAK_CHSB_RUS: Dict[str, Dict[str, Any]] = {
     }
 }
 
-def get_chsb_for_grade(grade: str, lang: str = "uz") -> Optional[Dict[str, Any]]:
+ADABIYOT_1_CHORAK_CHSB: Dict[str, Dict[str, Any]] = {
+    "9": {
+        "title": "9-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 9-sinf Adabiyot 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "9-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/9_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-C, 2-B, 3-B, 4-D, 5-B, 6-B, 7-C, 8-B, 9-D, 10-C, 11-D, 12-C, 13-A, 14-A, 15-D",
+        "keys_formatted": (
+            "1-C, 2-B, 3-B, 4-D, 5-B\n"
+            "6-B, 7-C, 8-B, 9-D, 10-C\n"
+            "11-D, 12-C, 13-A, 14-A, 15-D"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'C', 2: 'B', 3: 'B', 4: 'D', 5: 'B', 6: 'B', 7: 'C', 8: 'B', 9: 'D', 10: 'C', 11: 'D', 12: 'C', 13: 'A', 14: 'A', 15: 'D'}
+    },
+    "10": {
+        "title": "10-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 10-sinf Adabiyot 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "10-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/10_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-B, 2-C, 3-B, 4-B, 5-D, 6-D, 7-C, 8-B, 9-D, 10-C, 11-A, 12-D, 13-B, 14-D, 15-A",
+        "keys_formatted": (
+            "1-B, 2-C, 3-B, 4-B, 5-D\n"
+            "6-D, 7-C, 8-B, 9-D, 10-C\n"
+            "11-A, 12-D, 13-B, 14-D, 15-A"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'B', 2: 'C', 3: 'B', 4: 'B', 5: 'D', 6: 'D', 7: 'C', 8: 'B', 9: 'D', 10: 'C', 11: 'A', 12: 'D', 13: 'B', 14: 'D', 15: 'A'}
+    },
+    "11": {
+        "title": "11-sinf Adabiyot",
+        "doc_title": "2026-2027-o‘quv yili 11-sinf Adabiyot 1-CHSB (I variant)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "11-sinf",
+        "subject": "Adabiyot",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/11_sinf_adabiyot_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 3-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 4, 5, 6, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(B)  4.(Q)  5.(Q)\n6.(Q)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-C, 2-C, 3-C, 4-A, 5-C, 6-C, 7-D, 8-B, 9-C, 10-A, 11-C, 12-D, 13-B, 14-A, 15-B",
+        "keys_formatted": (
+            "1-C, 2-C, 3-C, 4-A, 5-C\n"
+            "6-C, 7-D, 8-B, 9-C, 10-A\n"
+            "11-C, 12-D, 13-B, 14-A, 15-B"
+        ),
+        "b_questions": [1, 2, 3],
+        "q_questions": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'C', 2: 'C', 3: 'C', 4: 'A', 5: 'C', 6: 'C', 7: 'D', 8: 'B', 9: 'C', 10: 'A', 11: 'C', 12: 'D', 13: 'B', 14: 'A', 15: 'B'}
+    }
+}
+
+def get_chsb_for_grade(grade: str, subject: str = "informatika", lang: str = "uz") -> Optional[Dict[str, Any]]:
     digits = "".join([c for c in grade if c.isdigit()])
+    subj_norm = (subject or "informatika").lower()
+    if "adab" in subj_norm:
+        return ADABIYOT_1_CHORAK_CHSB.get(digits)
     if lang == "ru":
         return INFORMATIKA_1_CHORAK_CHSB_RUS.get(digits) or INFORMATIKA_1_CHORAK_CHSB.get(digits)
     return INFORMATIKA_1_CHORAK_CHSB.get(digits)
