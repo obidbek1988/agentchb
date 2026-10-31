@@ -1235,7 +1235,7 @@ async def ask_m2_works(message: types.Message):
     msg_text = (
         "✅ **To‘g‘ri javoblar kaliti qabul qilindi!**\n\n"
         "📍 **3-QADAM (3 tadan): O‘quvchilarning daftardagi/qog‘ozdagi yozma ishlari rasmlarini yuboring**\n"
-        "*(Ketma-ket 30 tagacha rasm yoki umumiy PDF fayl yuborishingiz mumkin)*\n\n"
+        "*(Barcha o‘quvchilar rasmlarini birin-ketin yoki bitta umumiy PDF faylda yuborishingiz mumkin)*\n\n"
         "📝 **O‘QUVCHI ISHI UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
         "• O‘quvchining daftari yoki toza oq qog‘ozga yozgan BSB topshiriqlari yechimlari;\n"
         "• Varaqning yuqorisida **o‘quvchining ismi va familiyasi** (masalan: _Rahimova Madina 8-B_) aniq ko‘rinishi shart;\n"
@@ -1871,7 +1871,7 @@ async def ask_m4_student_tests(message: types.Message):
     msg_text = (
         "✅ **To‘g‘ri javoblar kaliti tasdiqlandi!**\n\n"
         "📸 **3-QADAM (3 tadan): O‘quvchilarning test javoblari varaqalari rasmlarini yuboring**\n"
-        "*(Ketma-ket 30 tagacha rasm yoki bitta umumiy PDF fayl yuborishingiz mumkin)*\n\n"
+        "*(Barcha o‘quvchilar rasmlarini birin-ketin yoki bitta umumiy PDF faylda yuborishingiz mumkin)*\n\n"
         "📋 **RASMGA OLISH VA YUBORISH NAMUNASI (Suratga qarang):**\n"
         "• **1-rasm (Oldi tomoni):** O‘quvchi F.I.O.si (masalan: *Erkayev Umidjon 9-B*) va savollar;\n"
         "• **2-rasm (Orqa tomoni):** 1 dan 15 gacha to‘ldirilgan Javoblar jadvali (kalit matrisi);\n"
@@ -2222,7 +2222,7 @@ async def mode5_journal_photo(message: types.Message, state: FSMContext):
 async def ask_m5_works(message: types.Message):
     msg_text = (
         "📍 **4-QADAM (4 tadan): O‘quvchilarning daftardagi yozma ishlari rasmlarini yuboring**\n"
-        "*(Ketma-ket 30 tagacha rasm yoki bitta umumiy PDF fayl yuborishingiz mumkin)*\n\n"
+        "*(Barcha o‘quvchilar rasmlarini birin-ketin yoki bitta umumiy PDF faylda yuborishingiz mumkin)*\n\n"
         "📝 **O‘QUVCHI ISHI UCHUN NAMUNA:**\n"
         "• O‘quvchi daftari yoki toza oq qog‘ozga yozgan BSB yozma ishi;\n"
         "• Varaq yuqorisida **o‘quvchining ismi va familiyasi** aniq ko‘rinsin.\n\n"
