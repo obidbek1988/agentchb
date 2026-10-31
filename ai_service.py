@@ -453,7 +453,7 @@ Javob FAQAT sof JSON bo'lsin.
         }
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
-    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
+    async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False, custom_criteria: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         batch_size = 4
         all_students = []
         final_info = {}
@@ -472,6 +472,11 @@ Javob FAQAT sof JSON bo'lsin.
                 final_info = res["school_info"]
             if not criteria_list and "criteria" in res:
                 criteria_list = res["criteria"]
+        if custom_criteria:
+            criteria_list = custom_criteria
+            if not final_info:
+                final_info = {}
+            final_info["max_score"] = sum(c.get("max_point", 10) for c in custom_criteria)
 
             new_students = res.get("students", [])
             for s_idx, st in enumerate(new_students):
@@ -505,6 +510,8 @@ Javob FAQAT sof JSON bo'lsin.
         if criteria_img_path and os.path.exists(criteria_img_path):
             all_imgs.append(criteria_img_path)
             crit_desc = "1-rasm: BSB Baholash mezonlari (savollar va har bir topshiriq uchun maksimal ballar)."
+        elif criteria_img_path:
+            crit_desc = f"BSB Baholash mezoni va topshiriqlar bo'yicha maksimal ballar (QAT'IY AMAL QILINSIN):\n{criteria_img_path}"
         else:
             crit_desc = "BSB Baholash mezoni topshiriqlar bo'yicha mezon asosida."
 

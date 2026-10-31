@@ -5,6 +5,7 @@ os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
 import asyncio
 import logging
+from typing import List, Dict, Any, Optional
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import CommandStart, Command
@@ -117,6 +118,7 @@ class BotStates(StatesGroup):
     m1_criteria = State()
 
     m2_criteria = State()
+    m2_edit_criteria_input = State()
     m2_keys = State()
     m2_works = State()
 
@@ -133,6 +135,7 @@ class BotStates(StatesGroup):
     m4_student_tests = State()
 
     m5_criteria = State()
+    m5_edit_criteria_input = State()
     m5_keys = State()
     m5_journal = State()
     m5_works = State()
@@ -379,9 +382,7 @@ def get_grade_selection_keyboard():
         [
             InlineKeyboardButton(text="👁 Mezonlarni ko‘rish", callback_data="view_criteria_menu")
         ],
-        [
-            InlineKeyboardButton(text="📷 Boshqa fan (Yangi mezon rasmi)", callback_data="custom_criteria")
-        ],
+
         [
             InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")
         ]
@@ -1116,6 +1117,36 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 2-REJIM: BSB ISHLARNI TEKSHIRISH ====================
+
+def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[str, Any]]:
+    """
+    Parses user-edited BSB criteria lines like:
+    1-topshiriq [10 ball]: Matn...
+    2-topshiriq [15 ball]: Algoritm...
+    Returns list of criteria dicts: [{'task_number': 1, 'skill_text': '...', 'max_point': 10}, ...]
+    """
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    criteria = []
+    task_num = 1
+    for line in lines:
+        pts = 10
+        m_pts = re.search(r'\[(\d+)\s*(?:ball|b)?\]|(\d+)\s*(?:ball|b)', line, re.IGNORECASE)
+        if m_pts:
+            pts = int(m_pts.group(1) or m_pts.group(2))
+        clean_text = line
+        criteria.append({
+            "task_number": task_num,
+            "skill_text": clean_text,
+            "max_point": pts
+        })
+        task_num += 1
+
+    if not criteria:
+        from criteria_store import get_criteria_for_grade
+        def_info = get_criteria_for_grade(default_grade)
+        return def_info.get("criteria", []) if def_info else []
+    return criteria
+
 @dp.message(F.text.contains("3️⃣ BSB (Ishlarni tekshirish)"))
 @dp.message(F.text.contains("2️⃣ BSB (Ishlarni tekshirish)"))
 @dp.message(F.text.contains("BSB (Ishlarni tekshirish)"))
@@ -1136,56 +1167,143 @@ async def mode2_start(message: types.Message, state: FSMContext):
     await state.update_data(credit_type=credit_type, works_paths=[])
     await state.set_state(BotStates.m2_criteria)
 
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m2_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m2_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m2_grade_10"),
+            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m2_grade_11"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
+    ])
     msg_text = (
-        "✍️ **2-REJIM: BSB o‘quvchilar yozma ishini tekshirish**\n\n"
-        "📍 **1-QADAM (3 tadan): BSB Baholash mezonini yuboring**\n"
-        "*(Rasm yoki PDF formatida)*\n\n"
-        "📋 **MEZON UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
-        "Mezonda BSB topshiriqlari va har biriga qo‘yiladigan ballar ko‘rsatiladi:\n"
-        "• 1-topshiriq (Nazariy/qisqa savol): **5 ball**\n"
-        "• 2-topshiriq (Amaliy mashq): **10 ball**\n"
-        "• 3-topshiriq (Masala yechish): **10 ball**\n"
-        "• 4-topshiriq (Loyiha / ijodiy ish): **15 ball**\n"
-        "*(Jami: 25, 40 yoki 50 ball)*\n\n"
-        "📸 _Iltimos, BSB baholash mezoni jadvali fotosuratini yoki PDF faylini yuboring:_"
+        "✍️ **3-REJIM: BSB o‘quvchilar yozma ishini tekshirish (1-CHORAK)**\n\n"
+        "🏛 Rasmiy BSB baholash mezonlari tizimda tayyor saqlangan!\n"
+        "*(Mezon rasmini qidirib, yuklab o‘tirish shart emas)*\n\n"
+        "Qaysi sinf ishlarini tekshirmoqchisiz? **Sinfni tanlang:**"
     )
-    await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
+    await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.message(BotStates.m2_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
-async def mode2_criteria_back(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("Asosiy menyu:", reply_markup=get_main_keyboard(message.from_user.id))
+@dp.callback_query(F.data == "m2_back_to_grades")
+async def cb_m2_back_to_grades(callback: CallbackQuery, state: FSMContext):
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m2_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m2_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m2_grade_10"),
+            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m2_grade_11"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
+    ])
+    msg = "✍️ **3-REJIM: BSB o‘quvchilar yozma ishini tekshirish**\n\nSinfni tanlang:"
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.message(BotStates.m2_criteria, F.document)
-async def mode2_criteria_doc(message: types.Message, state: FSMContext):
-    fname = (message.document.file_name or "").lower()
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m2_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        try:
-            status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, o‘qilmoqda...")
-            images = pdf_to_images(pdf_path)
-            cpath = images[0] if images else pdf_path
-            await state.update_data(criteria_path=cpath)
-            await status_pdf.delete()
-            await state.set_state(BotStates.m2_keys)
-            await ask_m2_keys(message)
-        except Exception as e:
-            logger.error(f"Mode 2 Criteria PDF error: {e}")
-            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
-    else:
-        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
+@dp.callback_query(F.data.startswith("m2_grade_"))
+async def cb_m2_pick_grade(callback: CallbackQuery, state: FSMContext):
+    grade = callback.data.replace("m2_grade_", "")
+    crit_info = get_criteria_for_grade(grade)
+    preview_text = format_criteria_preview(grade)
+    await state.update_data(
+        selected_grade=grade,
+        fixed_criteria=crit_info,
+        criteria_text=preview_text
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m2_back_to_grades")]
+    ])
+    card_text = (
+        f"{preview_text}\n\n"
+        f"Mezonni tasdiqlaysizmi yoki topshiriqlar matni va ballarini qo‘lda tahrirlaysizmi?"
+    )
+    await callback.answer()
+    await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m2_confirm_criteria")
+async def cb_m2_confirm_criteria(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m2_keys)
+    await callback.answer("Mezon tasdiqlandi!")
+    await ask_m2_keys(callback.message)
+
+@dp.callback_query(F.data == "m2_edit_criteria")
+async def cb_m2_edit_criteria(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m2_edit_criteria_input)
+    await callback.answer()
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+    preview_text = data.get("criteria_text", format_criteria_preview(grade))
+    msg = (
+        f"✏️ **{grade}-SINF BSB MEZONI VA BALLARINI TAHRIRLASH:**\n\n"
+        f"Hozirgi mezon:\n`{preview_text}`\n\n"
+        f"Topshiriqlar matnini va ballarini xohlaganingizcha o‘zgartirib, bitta matn xabari qilib yuboring:\n\n"
+        f"*(Bekor qilish uchun: '❌ Bekor qilish')*"
+    )
+    await callback.message.answer(msg, parse_mode="Markdown")
+
+@dp.message(BotStates.m2_edit_criteria_input, F.text)
+async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
+    txt = (message.text or "").strip()
+    if txt.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel", "⬅️ orqaga", "orqaga", "/back"]:
+        data = await state.get_data()
+        grade = data.get("selected_grade", "9")
+        await state.set_state(BotStates.m2_criteria)
+        preview_text = data.get("criteria_text", format_criteria_preview(grade))
+        ikb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
+            [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
+            [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m2_back_to_grades")]
+        ])
+        await message.answer(preview_text, reply_markup=ikb, parse_mode="Markdown")
+        return
+
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+    parsed_criteria = parse_custom_bsb_criteria(txt, default_grade=grade)
+    tot_points = sum(c.get("max_point", 10) for c in parsed_criteria)
+
+    crit_info = {
+        "title": f"{grade}-sinf Informatika 1-BSB",
+        "class_name": f"{grade}-sinf",
+        "subject": "Informatika",
+        "max_score": tot_points,
+        "criteria": parsed_criteria
+    }
+    await state.update_data(
+        fixed_criteria=crit_info,
+        criteria_text=txt
+    )
+    await state.set_state(BotStates.m2_criteria)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu yangi mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Qayta tahrirlash", callback_data="m2_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m2_back_to_grades")]
+    ])
+    msg = (
+        f"✅ **Yangi mezon saqlandi (Jami: {tot_points} ball):**\n\n"
+        f"{txt}\n\n"
+        f"Tasdiqlaysizmi?"
+    )
+    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
 
 @dp.message(BotStates.m2_criteria, F.photo)
-async def mode2_criteria(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    cpath = f"temp/m2_c_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=cpath)
-    await state.update_data(criteria_path=cpath)
-
-    await state.set_state(BotStates.m2_keys)
-    await ask_m2_keys(message)
+@dp.message(BotStates.m2_criteria, F.document)
+@dp.message(BotStates.m2_edit_criteria_input, F.photo)
+@dp.message(BotStates.m2_edit_criteria_input, F.document)
+async def mode2_criteria_photo_reject(message: types.Message):
+    await message.answer(
+        "⚠️ **Mezon rasmini yuborish shart emas!**\n\n"
+        "Rasmiy mezon bazada tayyor. Agar o‘zgartirmoqchi bo‘lsangiz, '✏️ Mezon va ballarni tahrirlash' tugmasini bosib, matn va ballarni qo‘lda yozing.",
+        parse_mode="Markdown"
+    )
 
 async def ask_m2_keys(message: types.Message):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
@@ -1387,12 +1505,15 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
             await message.answer(txt)
 
     try:
+        crit_input = data.get("criteria_text", "") or cpath
+        custom_crit = data.get("fixed_criteria", {}).get("criteria", [])
         parsed = await ai_service.evaluate_student_works(
-            cpath, wlist,
+            crit_input, wlist,
             progress_callback=update_progress,
             batch_callback=send_batch_works_results,
             keys_input=keys_input,
-            is_text_key=is_text_key
+            is_text_key=is_text_key,
+            custom_criteria=custom_crit
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{actual_user_id}_{cname}_bsb_evaluated.xlsx"
@@ -2422,71 +2543,159 @@ async def mode5_start(message: types.Message, state: FSMContext):
     await state.update_data(credit_type=credit_type, works_paths=[], journal_averages={})
     await state.set_state(BotStates.m5_criteria)
 
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m5_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m5_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m5_grade_10"),
+            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m5_grade_11"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
+    ])
     msg_text = (
         "✍️ **5-REJIM: BSB (Darsdagi o‘rtacha bahoga moslash)**\n\n"
-        "📍 **1-QADAM (4 tadan): BSB Baholash mezonini yuboring**\n"
-        "*(Rasm yoki PDF formatida)*\n\n"
-        "📋 **MEZON UCHUN NAMUNA (Qanday bo‘lishi kerak?):**\n"
-        "Mezonda BSB topshiriqlari va har biriga qo‘yiladigan ballar ko‘rsatiladi:\n"
-        "• 1-topshiriq (Nazariy savol): **5 ball**\n"
-        "• 2-topshiriq (Amaliy mashq): **10 ball**\n"
-        "• 3-topshiriq (Masala yechish): **10 ball**\n"
-        "• 4-topshiriq (Loyiha ishi): **25 ball**\n"
-        "*(Jami: 50 ball)*\n\n"
-        "📸 _Iltimos, BSB baholash mezoni jadvali fotosuratini yoki PDF faylini yuboring:_"
+        "🏛 Rasmiy BSB baholash mezonlari tizimda tayyor saqlangan!\n"
+        "*(Mezon rasmini qidirib, skrinshot tashlash shart emas)*\n\n"
+        "Qaysi sinf hisobotini tayyorlamoqchisiz? **Sinfni tanlang:**"
     )
-    await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
+    await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.message(BotStates.m5_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
-async def mode5_criteria_back(message: types.Message, state: FSMContext):
-    await state.clear()
-    await message.answer("Asosiy menyu:", reply_markup=get_main_keyboard(message.from_user.id))
+@dp.callback_query(F.data == "m5_back_to_grades")
+async def cb_m5_back_to_grades(callback: CallbackQuery, state: FSMContext):
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m5_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m5_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m5_grade_10"),
+            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m5_grade_11"),
+        ],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
+    ])
+    msg = "✍️ **5-REJIM: BSB (Bahoga moslash)**\n\nSinfni tanlang:"
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.message(BotStates.m5_criteria, F.document)
-async def mode5_criteria_doc(message: types.Message, state: FSMContext):
-    fname = (message.document.file_name or "").lower()
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m5_c_pdf_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        try:
-            status_pdf = await message.answer("📄 Mezon PDF qabul qilindi, o‘qilmoqda...")
-            images = pdf_to_images(pdf_path)
-            cpath = images[0] if images else pdf_path
-            await state.update_data(criteria_path=cpath)
-            await status_pdf.delete()
-            await state.set_state(BotStates.m5_keys)
-            await ask_m5_keys(message)
-        except Exception as e:
-            logger.error(f"Mode 5 Criteria PDF error: {e}")
-            await message.answer("❌ PDF faylni ochishda xatolik yuz berdi. Rasm ko‘rinishida yuboring.")
-    else:
-        await message.answer("Iltimos, mezonni rasm yoki PDF formatida yuboring.")
+@dp.callback_query(F.data.startswith("m5_grade_"))
+async def cb_m5_pick_grade(callback: CallbackQuery, state: FSMContext):
+    grade = callback.data.replace("m5_grade_", "")
+    crit_info = get_criteria_for_grade(grade)
+    preview_text = format_criteria_preview(grade)
+    await state.update_data(
+        selected_grade=grade,
+        fixed_criteria=crit_info,
+        criteria_text=preview_text
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m5_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m5_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m5_back_to_grades")]
+    ])
+    card_text = (
+        f"{preview_text}\n\n"
+        f"Mezonni tasdiqlaysizmi yoki topshiriqlar matni va ballarini qo‘lda tahrirlaysizmi?"
+    )
+    await callback.answer()
+    await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m5_confirm_criteria")
+async def cb_m5_confirm_criteria(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m5_keys)
+    await callback.answer("Mezon tasdiqlandi!")
+    await ask_m5_keys(callback.message)
+
+@dp.callback_query(F.data == "m5_edit_criteria")
+async def cb_m5_edit_criteria(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m5_edit_criteria_input)
+    await callback.answer()
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+    crit_info = get_criteria_for_grade(grade)
+    c_list = crit_info.get("criteria", []) if crit_info else []
+    sample_lines = []
+    for c in c_list:
+        sample_lines.append(f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}")
+    sample_txt = "\n".join(sample_lines)
+
+    guide_msg = (
+        "✏️ **MEZON VA BALLARNI TAHRIRLASH**\n\n"
+        "Quyidagi matnni nusxalab olib, topshiriqlar nomi yoki ballarini o‘zingizga moslab o‘zgartiring va botga yuboring:\n\n"
+        f"```\n{sample_txt}\n```\n\n"
+        "💡 _Eslatma: Har bir qator oxirida yoki kvadrat qavs ichida ball ko‘rsatiladi. Masalan: [10 ball]_"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data=f"m5_grade_{grade}")]
+    ])
+    await callback.message.edit_text(guide_msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.message(BotStates.m5_edit_criteria_input, F.text)
+async def mode5_criteria_custom_text(message: types.Message, state: FSMContext):
+    if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+    parsed_crit = parse_custom_bsb_criteria(message.text, default_grade=grade)
+    tot_pts = sum(c.get("max_point", 10) for c in parsed_crit)
+
+    lines = [f"📋 **Yangilangan {grade}-sinf BSB mezoni (Jami: {tot_pts} ball):**"]
+    for c in parsed_crit:
+        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
+    custom_preview = "\n".join(lines)
+
+    crit_info = {
+        "grade": grade,
+        "max_score": tot_pts,
+        "criteria": parsed_crit
+    }
+    await state.update_data(
+        fixed_criteria=crit_info,
+        criteria_text=custom_preview
+    )
+
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezon bilan davom etish", callback_data="m5_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Qaytadan tahrirlash", callback_data="m5_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data=f"m5_grade_{grade}")]
+    ])
+    await message.answer(
+        f"{custom_preview}\n\n✅ Mezon qabul qilindi! Keyingi bosqichga o‘tamizmi?",
+        reply_markup=ikb,
+        parse_mode="Markdown"
+    )
 
 @dp.message(BotStates.m5_criteria, F.photo)
-async def mode5_criteria_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    cpath = f"temp/m5_c_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=cpath)
-    await state.update_data(criteria_path=cpath)
-
-    await state.set_state(BotStates.m5_keys)
-    await ask_m5_keys(message)
+@dp.message(BotStates.m5_criteria, F.document)
+@dp.message(BotStates.m5_edit_criteria_input, F.photo)
+@dp.message(BotStates.m5_edit_criteria_input, F.document)
+async def mode5_criteria_photo_rejected(message: types.Message):
+    await message.answer(
+        "⚠️ **BSB baholash mezonini rasm yoki PDF ko‘rinishida yuklash shart emas!**\n\n"
+        "AI fotosuratdagi mezonni xato o‘qishining oldini olish uchun, mezon tizimda matn holida saqlangan.\n\n"
+        "Agar mezonni yoki ballarni o‘zgartirmoqchi bo‘lsangiz, **[✏️ Mezon va ballarni tahrirlash]** tugmasi orqali to‘g‘ridan-to‘g‘ri matn ko‘rinishida istalgancha tahrirlashingiz mumkin!",
+        parse_mode="Markdown"
+    )
 
 async def ask_m5_keys(message: types.Message):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⚡ Kalit mezonda bor (Keyingi qadam)", callback_data="m5_skip_keys")]
     ])
     msg_text = (
-        "✅ **BSB baholash mezoni qabul qilindi!**\n\n"
-        "📍 **2-QADAM (4 tadan): To‘g‘ri javoblar KALITINI yuboring**\n"
-        "*(Matn, rasm yoki PDF ko‘rinishida)*\n\n"
+        "✅ **BSB baholash mezoni tasdiqlandi!**\n\n"
+        "📍 **2-QADAM (4 tadan): To‘g‘ri javoblar KALITINI kiriting**\n"
+        "*(Faqat matn ko‘rinishida yozing yoki pastdagi tugmani bosing)*\n\n"
         "🔑 **KALIT UCHUN NAMUNA:**\n"
-        "1️⃣ **Matn ko‘rinishida:**\n"
         "• 1-topshiriq javobi: Axborot — bu borliq haqidagi maʼlumotlar...\n"
-        "• 2-topshiriq javobi: Algoritm chiziqli, tarmoqlanuvchi va takrorlanuvchi...\n"
-        "2️⃣ **Yoki to‘g‘ri yechimlar yozilgan varaq fotosuratini** yuboring!\n\n"
-        "💡 _Agar to‘g‘ri javoblar mezon varag‘ining o‘zida bo‘lsa, pastdagi **'⚡ Kalit mezonda bor'** tugmasini bosing:_"
+        "• 2-topshiriq javobi: Algoritm chiziqli, tarmoqlanuvchi va takrorlanuvchi...\n\n"
+        "💡 _Agar to‘g‘ri javoblar mezon topshirig‘ining o‘zida tushunarli bo‘lsa, pastdagi **'⚡ Kalit mezonda bor'** tugmasini bosing:_"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
@@ -2499,8 +2708,15 @@ async def cb_m5_skip_keys(callback: CallbackQuery, state: FSMContext):
 
 @dp.message(BotStates.m5_keys, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
 async def mode5_keys_back(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
     await state.set_state(BotStates.m5_criteria)
-    await message.answer("⬅️ **1-QADAM: Mezon rasmini yuklashga qaytildi.**\n\nMezon rasmini yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m5_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m5_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m5_back_to_grades")]
+    ])
+    await message.answer("⬅️ **1-QADAM: Mezon bosqichiga qaytildi.**", reply_markup=ikb, parse_mode="Markdown")
 
 @dp.message(BotStates.m5_keys, F.text)
 async def mode5_keys_text(message: types.Message, state: FSMContext):
@@ -2512,55 +2728,19 @@ async def mode5_keys_text(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m5_journal)
     await ask_m5_journal(message)
 
-@dp.message(BotStates.m5_keys, F.document)
-async def mode5_keys_doc(message: types.Message, state: FSMContext):
-    fname = (message.document.file_name or "").lower()
-    if fname.endswith(".pdf"):
-        os.makedirs("temp", exist_ok=True)
-        pdf_path = f"temp/m5_k_pdf_{message.from_user.id}_{message.message_id}.pdf"
-        await bot.download(message.document, destination=pdf_path)
-        try:
-            images = pdf_to_images(pdf_path)
-            kpath = images[0] if images else pdf_path
-            await state.update_data(keys_path=kpath, keys_text="")
-            await state.set_state(BotStates.m5_journal)
-            await ask_m5_journal(message)
-        except Exception as e:
-            logger.error(f"Mode 5 Keys PDF error: {e}")
-            await message.answer("❌ PDF kalitni ochishda xatolik yuz berdi. Rasm yuboring.")
-    else:
-        await message.answer("Iltimos, kalitni rasm yoki matn ko‘rinishida yuboring.")
-
 @dp.message(BotStates.m5_keys, F.photo)
-async def mode5_keys_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    kpath = f"temp/m5_k_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=kpath)
-    await state.update_data(keys_path=kpath, keys_text="")
-
-    await state.set_state(BotStates.m5_journal)
-    await ask_m5_journal(message)
-
-async def ask_m5_journal(message: types.Message):
-    msg_text = (
-        "✅ **To‘g‘ri javoblar kaliti qabul qilindi!**\n\n"
-        "📍 **3-QADAM (4 tadan): eMaktab elektron jurnali Excel faylini yuboring**\n"
-        "*(Faqat rasmiy Excel .xlsx yoki .xls formatida)*\n\n"
-        "📊 **BAHOGA MOSLASH MEZONI:**\n"
-        "• Bot har bir o‘quvchining darsdagi baholari o‘rtachasini (1-10 ballik) hisoblaydi;\n"
-        "• 50 ballik BSB bahosi shunga qatʼiy moslanadi:\n"
-        "  - **9–10 baho (A'lo):** ➔ **43 dan 50 ballgacha**\n"
-        "  - **7–8 baho (Yaxshi):** ➔ **33 dan 42 ballgacha**\n"
-        "  - **5–6 baho (Qoniqarli):** ➔ **15 dan 32 ballgacha**\n"
-        "  - **1–4 baho (Qoniqarsiz):** ➔ **0 dan 12 ballgacha**\n\n"
-        "💡 _Iltimos, eMaktabdan yuklangan rasmiy Excel (.xlsx yoki .xls) faylini yuboring:_"
+@dp.message(BotStates.m5_keys, F.document)
+async def mode5_keys_photo_rejected(message: types.Message):
+    await message.answer(
+        "⚠️ **Kalitni rasm yoki PDF ko‘rinishida yuklash shart emas!**\n\n"
+        "Iltimos, kalitni to‘g‘ridan-to‘g‘ri **matn ko‘rinishida** yozib yuboring yoki topshiriqlar ichida javob aniq bo‘lsa, **'⚡ Kalit mezonda bor'** tugmasini bosing.",
+        parse_mode="Markdown"
     )
-    await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
 
 @dp.message(BotStates.m5_journal, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
 async def mode5_journal_back(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m5_keys)
-    await message.answer("⬅️ **2-QADAM: To‘g‘ri javoblar kalitini kiritishga qaytildi.**\n\nKalitni yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
+    await ask_m5_keys(message)
 
 @dp.message(BotStates.m5_journal, F.document)
 async def mode5_journal_doc(message: types.Message, state: FSMContext):
@@ -2728,14 +2908,17 @@ async def mode5_finish(message: types.Message, state: FSMContext, user_id: int =
             await message.answer(txt)
 
     try:
+        crit_input = data.get("criteria_text", "") or cpath
+        custom_crit = data.get("fixed_criteria", {}).get("criteria", [])
         parsed = await ai_service.evaluate_student_works(
-            cpath, wlist,
+            crit_input, wlist,
             progress_callback=update_progress,
             batch_callback=send_batch_works_results,
             keys_input=keys_input,
             is_text_key=is_text_key,
             journal_averages=averages,
-            is_adjusted=True
+            is_adjusted=True,
+            custom_criteria=custom_crit
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
         out_excel = f"temp/{actual_user_id}_{cname}_bsb_bahoga_moslangan.xlsx"
@@ -2777,7 +2960,6 @@ async def mode6_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m6_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m6_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m6_to_main_menu")]
     ])
     msg_text = (
@@ -2839,7 +3021,6 @@ async def cb_m6_back_subjects(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m6_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m6_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m6_to_main_menu")]
     ])
     msg_text = (
