@@ -1866,17 +1866,22 @@ async def cb_m4_confirm_key(callback: CallbackQuery, state: FSMContext):
     await ask_m4_student_tests(callback.message)
 
 async def ask_m4_student_tests(message: types.Message):
+    guide_path = "assets/test_namuna_guide.jpg"
     msg_text = (
         "✅ **To‘g‘ri javoblar kaliti tasdiqlandi!**\n\n"
-        "📍 **3-QADAM (3 tadan): O‘quvchilarning test javoblari varaqalari rasmlarini yuboring**\n"
+        "📸 **3-QADAM (3 tadan): O‘quvchilarning test javoblari varaqalari rasmlarini yuboring**\n"
         "*(Ketma-ket 30 tagacha rasm yoki bitta umumiy PDF fayl yuborishingiz mumkin)*\n\n"
-        "📝 **O‘QUVCHI ISHI UCHUN ESLATMA:**\n"
-        "• O‘quvchi belgilagan test titul varaqasi yoki daftardagi javoblar ro‘yxati;\n"
-        "• Yoki test kitobchasida ruchka/qalam bilan belgilangan variantlar (A, B, C, D);\n"
-        "• Varaq boshida **o‘quvchining F.I.O.si** (masalan: _Olimov Sardor 9-A_) aniq ko‘rinsin.\n\n"
-        "📸 _O‘quvchilar test varaqalari rasmlarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
+        "📋 **RASMGA OLISH VA YUBORISH NAMUNASI (Suratga qarang):**\n"
+        "• **1-rasm (Oldi tomoni):** O‘quvchi F.I.O.si (masalan: *Erkayev Umidjon 9-B*) va savollar;\n"
+        "• **2-rasm (Orqa tomoni):** 1 dan 15 gacha to‘ldirilgan Javoblar jadvali (kalit matrisi);\n"
+        "• AI ikkala rasmni bitta o‘quvchining ishi deb avtomatik birlashtirib tekshiradi!\n\n"
+        "🚀 _O‘quvchilar test varaqalarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
-    await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
+    if os.path.exists(guide_path):
+        photo = FSInputFile(guide_path)
+        await message.answer_photo(photo, caption=msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
+    else:
+        await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m4_student_tests, F.document)
 async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
