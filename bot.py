@@ -1654,7 +1654,6 @@ async def mode4_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m4_to_main_menu")]
     ])
     msg_text = (
@@ -1715,7 +1714,6 @@ async def cb_m4_back_subjects(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m4_to_main_menu")]
     ])
     msg_text = (
@@ -1777,7 +1775,6 @@ async def show_m4_criteria_card(message: types.Message, state: FSMContext, is_ed
         [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
         [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
         [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
-        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
         [InlineKeyboardButton(text="⬅️ Orqaga (Sinf harfini o‘zgartirish)", callback_data="m4_back_to_letters")]
     ])
     if is_edit:
@@ -1958,7 +1955,6 @@ async def cb_m4_back_to_criteria(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
         [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
         [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
-        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
         [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m4_back_to_grades")]
     ])
     await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
@@ -2005,7 +2001,6 @@ async def mode4_edit_criteria_handler(message: types.Message, state: FSMContext)
                 [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
                 [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
                 [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
-                [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
                 [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m4_back_to_grades")]
             ])
             await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
@@ -2160,8 +2155,7 @@ async def show_m4_keys_card(message: types.Message, keys_str: str):
     )
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Shu to‘g‘ri kalitni tasdiqlash", callback_data="m4_confirm_key")],
-        [InlineKeyboardButton(text="✏️ Kalitni o‘zgartirish / tahrirlash", callback_data="m4_edit_key")],
-        [InlineKeyboardButton(text="🔑 Boshqa kalit kiritish (Matn/Rasm)", callback_data="m4_custom_key")],
+        [InlineKeyboardButton(text="✏️ Kalitni tahrirlash (Matn)", callback_data="m4_edit_key")],
         [InlineKeyboardButton(text="⬅️ Orqaga (Mezon kartochkasiga)", callback_data="m4_back_to_criteria")]
     ])
     try:
@@ -2175,8 +2169,8 @@ async def cb_m4_edit_key(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     msg = (
         "✏️ **TO‘G‘RI JAVOBLAR KALITINI KIRITING:**\n\n"
-        "Kalitni matn ko‘rinishida yozing yoki fotosuratini yuboring:\n\n"
-        "Masalan (matn ko‘rinishida):\n"
+        "Kalitni faqat matn ko‘rinishida yozing:\n\n"
+        "Masalan:\n"
         "`1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C`\n\n"
         "*(Bekor qilish uchun: '❌ Bekor qilish')*"
     )
@@ -2195,20 +2189,12 @@ async def mode4_edit_keys_text(message: types.Message, state: FSMContext):
 
 @dp.message(BotStates.m4_edit_keys_input, F.photo)
 async def mode4_edit_keys_photo(message: types.Message, state: FSMContext):
-    os.makedirs("temp", exist_ok=True)
-    kpath = f"temp/m4_k_{message.from_user.id}_{message.message_id}.jpg"
-    await bot.download(message.photo[-1], destination=kpath)
-    await state.update_data(keys_path=kpath, keys_text="")
-
     msg = (
-        "📸 **Kalit fotosurati qabul qilindi!**\n\n"
-        "Shu kalit tasviri bo‘yicha tekshirishni tasdiqlaysizmi?"
+        "⚠️ **Kalit rasmini jo‘natish shart emas!**\n\n"
+        "AI rasm kalitni o‘qishda adashmasligi uchun, iltimos, kalitni **faqat matn ko‘rinishida** yozing:\n\n"
+        "Masalan: `1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C`"
     )
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Shu rasm kalitni tasdiqlash", callback_data="m4_confirm_key")],
-        [InlineKeyboardButton(text="✏️ Qayta kiritish", callback_data="m4_edit_key")]
-    ])
-    await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+    await message.answer(msg, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "m4_confirm_key")
 async def cb_m4_confirm_key(callback: CallbackQuery, state: FSMContext):
