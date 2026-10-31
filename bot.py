@@ -117,6 +117,8 @@ class BotStates(StatesGroup):
     m1_journal = State()
     m1_criteria = State()
 
+    m2_select_class_letter = State()
+    m2_custom_class_input = State()
     m2_criteria = State()
     m2_edit_criteria_input = State()
     m2_keys = State()
@@ -373,6 +375,7 @@ def get_grade_selection_keyboard():
             InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m1_universal_criteria")
         ],
         [
+            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="grade_5"),
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="grade_7"),
             InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="grade_8"),
@@ -394,6 +397,7 @@ def get_grade_selection_keyboard():
 def get_criteria_preview_keyboard():
     inline_kb = [
         [
+            InlineKeyboardButton(text="5-sinf", callback_data="preview_5"),
             InlineKeyboardButton(text="6-sinf", callback_data="preview_6"),
             InlineKeyboardButton(text="7-sinf", callback_data="preview_7"),
             InlineKeyboardButton(text="8-sinf", callback_data="preview_8"),
@@ -1316,6 +1320,7 @@ async def mode2_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m2_universal_criteria")],
         [
+            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m2_grade_5"),
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
             InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m2_grade_8"),
@@ -1338,7 +1343,9 @@ async def mode2_start(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "m2_back_to_grades")
 async def cb_m2_back_to_grades(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m2_universal_criteria")],
         [
+            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m2_grade_5"),
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
             InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m2_grade_8"),
@@ -1353,27 +1360,132 @@ async def cb_m2_back_to_grades(callback: CallbackQuery, state: FSMContext):
     msg = "✍️ **3-REJIM: BSB o‘quvchilar yozma ishini tekshirish**\n\nSinfni tanlang:"
     await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
 
+def get_m2_class_letters_keyboard(grade_code: str):
+    letters = ["A", "B", "V", "G", "D", "E", "F", "J", "K"]
+    rows = []
+    row = []
+    for l in letters:
+        c_label = f"{grade_code}-{l}"
+        row.append(InlineKeyboardButton(text=f"📌 {c_label}", callback_data=f"m2_cname_{c_label}"))
+        if len(row) == 4:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+
+    rows.append([
+        InlineKeyboardButton(text=f"➡️ Harfsiz ({grade_code}-sinf)", callback_data=f"m2_cname_{grade_code}-sinf"),
+        InlineKeyboardButton(text="✏️ Boshqa harf yozish", callback_data="m2_cname_custom")
+    ])
+    rows.append([
+        InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m2_back_to_grades")
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
 @dp.callback_query(F.data.startswith("m2_grade_"))
 async def cb_m2_pick_grade(callback: CallbackQuery, state: FSMContext):
     grade = callback.data.replace("m2_grade_", "")
+    await state.update_data(selected_grade=grade)
+    await state.set_state(BotStates.m2_select_class_letter)
+    ikb = get_m2_class_letters_keyboard(grade)
+    msg = (
+        f"🎯 **{grade}-sinf tanlandi!**\n\n"
+        f"Hisobot sarlavhasi (Bayonnoma) aniq chiqishi uchun **sinf harfini tanlang:**"
+    )
+    await callback.answer()
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "m2_back_to_letters")
+async def cb_m2_back_to_letters(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+    await state.set_state(BotStates.m2_select_class_letter)
+    ikb = get_m2_class_letters_keyboard(grade)
+    msg = f"🎯 **{grade}-sinf** | Sinf harfini tanlang:"
+    await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("m2_cname_"))
+async def cb_m2_set_cname(callback: CallbackQuery, state: FSMContext):
+    cname = callback.data.replace("m2_cname_", "").strip()
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+
+    if cname == "custom":
+        await state.set_state(BotStates.m2_custom_class_input)
+        await callback.answer()
+        msg = (
+            f"✏️ **{grade}-sinf uchun harf yoki sinf nomini yozing:**\n\n"
+            f"Masalan: `B` yoki `{grade}-B` (yoki `{grade}-rus`):\n\n"
+            f"*(Bekor qilish uchun: '❌ Bekor qilish')*"
+        )
+        await callback.message.answer(msg, parse_mode="Markdown")
+        return
+
     crit_info = get_criteria_for_grade(grade)
     preview_text = format_criteria_preview(grade)
+    if cname:
+        preview_text = preview_text.replace(f"{grade}-sinf", f"{cname} sinf")
+
     await state.update_data(
-        selected_grade=grade,
+        class_name=cname,
         fixed_criteria=crit_info,
         criteria_text=preview_text
     )
+    await state.set_state(BotStates.m2_criteria)
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
         [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
-        [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m2_back_to_grades")]
+        [InlineKeyboardButton(text="⬅️ Sinf harfini o‘zgartirish", callback_data="m2_back_to_letters")]
     ])
     card_text = (
+        f"🏫 **Tanlangan sinf:** `{cname}`\n\n"
         f"{preview_text}\n\n"
-        f"Mezonni tasdiqlaysizmi yoki topshiriqlar matni va ballarini qo‘lda tahrirlaysizmi?"
+        f"Mezonni tasdiqlaysizmi yoki topshiriqlar matni va ballarini tahrirlaysizmi?"
     )
-    await callback.answer()
+    await callback.answer(f"{cname} tanlandi!")
     await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.message(BotStates.m2_custom_class_input, F.text)
+async def mode2_custom_class_text(message: types.Message, state: FSMContext):
+    txt = (message.text or "").strip()
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+
+    if txt.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel", "⬅️ orqaga", "orqaga", "/back", "back"]:
+        await state.set_state(BotStates.m2_select_class_letter)
+        ikb = get_m2_class_letters_keyboard(grade)
+        await message.answer(f"🎯 **{grade}-sinf** | Sinf harfini tanlang:", reply_markup=ikb, parse_mode="Markdown")
+        return
+
+    if len(txt) <= 2 and (txt.isalpha() or txt.isdigit()):
+        cname = f"{grade}-{txt.upper()}"
+    elif txt.startswith(grade):
+        cname = txt.upper()
+    else:
+        cname = txt
+
+    crit_info = get_criteria_for_grade(grade)
+    preview_text = format_criteria_preview(grade)
+    if cname:
+        preview_text = preview_text.replace(f"{grade}-sinf", f"{cname} sinf")
+
+    await state.update_data(
+        class_name=cname,
+        fixed_criteria=crit_info,
+        criteria_text=preview_text
+    )
+    await state.set_state(BotStates.m2_criteria)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Sinf harfini o‘zgartirish", callback_data="m2_back_to_letters")]
+    ])
+    card_text = (
+        f"🏫 **Tanlangan sinf:** `{cname}`\n\n"
+        f"{preview_text}\n\n"
+        f"Mezonni tasdiqlaysizmi yoki topshiriqlar matni va ballarini tahrirlaysizmi?"
+    )
+    await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
 
 @dp.callback_query(F.data == "m2_confirm_criteria")
 async def cb_m2_confirm_criteria(callback: CallbackQuery, state: FSMContext):
@@ -1682,7 +1794,10 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
             is_text_key=is_text_key,
             custom_criteria=custom_crit
         )
-        cname = parsed.get("school_info", {}).get("class_name", "sinf")
+        cname = data.get("class_name") or parsed.get("school_info", {}).get("class_name", f"{data.get('selected_grade', '9')}-sinf")
+        if not parsed.get("school_info"):
+            parsed["school_info"] = {}
+        parsed["school_info"]["class_name"] = cname
         out_excel = f"temp/{actual_user_id}_{cname}_bsb_evaluated.xlsx"
         build_bsb_excel(parsed, out_excel)
 
@@ -2727,6 +2842,7 @@ async def mode5_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m5_universal_criteria")],
         [
+            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m5_grade_5"),
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
             InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m5_grade_8"),
@@ -2749,7 +2865,9 @@ async def mode5_start(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data == "m5_back_to_grades")
 async def cb_m5_back_to_grades(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m5_universal_criteria")],
         [
+            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m5_grade_5"),
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
             InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m5_grade_8"),

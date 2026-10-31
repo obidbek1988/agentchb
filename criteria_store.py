@@ -6,6 +6,36 @@ O'zbekiston umumta'lim maktablari Informatika fani 1-chorak rasmiy BSB mezonlar 
 from typing import Dict, Any, List, Optional
 
 INFORMATIKA_1_CHORAK_BSB: Dict[str, Dict[str, Any]] = {
+    "5": {
+        "title": "5-sinf Informatika 1-BSB",
+        "class_name": "5-sinf",
+        "subject": "Informatika",
+        "quarter": 1,
+        "bsb_number": 1,
+        "max_score": 25,
+        "criteria": [
+            {
+                "task_number": 1,
+                "skill_text": "Axborot tushunchasi va uning turlari (matnli, tovushli, grafik, raqamli);\n\nJami: 5 ball",
+                "max_point": 5
+            },
+            {
+                "task_number": 2,
+                "skill_text": "Kompyuterning asosiy qurilmalari va ularning vazifalarini bilish;\n\nJami: 5 ball",
+                "max_point": 5
+            },
+            {
+                "task_number": 3,
+                "skill_text": "Klaviatura va sichqoncha bilan ishlash ko‘nikmalari;\n\nJami: 5 ball",
+                "max_point": 5
+            },
+            {
+                "task_number": 4,
+                "skill_text": "Matn muharririda sodda matn terish va shriftlarni tahrirlash;\n\nJami: 10 ball",
+                "max_point": 10
+            }
+        ]
+    },
     "6": {
         "title": "6-sinf Informatika 1-BSB",
         "class_name": "6-sinf",
