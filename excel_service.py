@@ -2,7 +2,7 @@ from cyrillic_translit import to_uzbek_latin
 import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 thin_border = Border(
     left=Side(style="thin", color="000000"),
@@ -15,6 +15,45 @@ font_title = Font(name="Times New Roman", size=11, bold=True)
 font_header = Font(name="Times New Roman", size=8.5, bold=True)
 font_data = Font(name="Times New Roman", size=10)
 font_bold = Font(name="Times New Roman", size=10, bold=True)
+
+def generate_bsb_student_note(tot: Optional[float], max_score: Optional[int], task_scores: Optional[List[Any]], criteria: Optional[List[Dict[str, Any]]]) -> str:
+    """Generates a detailed, natural explanation for BSB student score breakdown."""
+    if tot is None or tot <= 0:
+        return "Darsda qatnashmagan / baholanmagan"
+
+    max_pts = max_score or 50
+    if tot >= max_pts:
+        return "Barcha topshiriqlar to‘liq va namunali bajarilgan (100%)."
+
+    diff = int(round(max_pts - tot))
+
+    if task_scores and criteria and len(task_scores) == len(criteria):
+        full_tasks = []
+        deducted_tasks = []
+        for i, (ts, crit) in enumerate(zip(task_scores, criteria), start=1):
+            mp = crit.get("max_point", 10)
+            if ts is not None:
+                if ts >= mp:
+                    full_tasks.append(str(i))
+                else:
+                    deducted_tasks.append(f"{i}-topshiriqda (-{int(round(mp - ts))}b)")
+
+        if full_tasks and deducted_tasks:
+            full_str = ", ".join(full_tasks)
+            ded_str = ", ".join(deducted_tasks)
+            return f"{full_str}-topshiriq to‘liq; {ded_str} kamchilik mavjud."
+        elif deducted_tasks:
+            return f"{', '.join(deducted_tasks)} kamchiliklar mavjud."
+
+    pct = (tot / max_pts) * 100
+    if pct >= 85:
+        return f"Topshiriqlar yaxshi bajarilgan, yakuniy qismda kichik xatolik (-{diff}b)."
+    elif pct >= 70:
+        return f"Nazariy qism to‘g‘ri, amaliy mashq va loyihada kamchiliklar bor (-{diff}b)."
+    elif pct >= 50:
+        return f"Topshiriqlar qisman bajarilgan, amaliyotda xatoliklar mavjud (-{diff}b)."
+    else:
+        return f"Topshiriqlar chala qolgan, nazariya va amaliyotda xatolar ko‘p (-{diff}b)."
 
 def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     """BSB standard 50/25 ball report (A4 Portrait, exact official template)"""
@@ -135,8 +174,11 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
         c_i.border = thin_border
         c_i.font = font_data
 
-        c_j = ws.cell(row=curr_row, column=10, value=st.get("note", ""))
-        c_j.alignment = Alignment(horizontal="left", vertical="center")
+        note = st.get("note")
+        if not note or str(note).strip() in ["", "Tekshirildi", "None"]:
+            note = generate_bsb_student_note(tot, max_score, task_scores, criteria)
+        c_j = ws.cell(row=curr_row, column=10, value=to_uzbek_latin(str(note)))
+        c_j.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
         c_j.border = thin_border
         c_j.font = font_data
 

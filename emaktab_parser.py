@@ -188,12 +188,15 @@ def _parse_xls(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None, 
                     break
 
             task_scores = distribute_score_to_tasks(tot, criteria) if criteria else [None] * 5
+            from excel_service import generate_bsb_student_note
+            note = generate_bsb_student_note(tot, max_score, task_scores, criteria)
 
             students.append({
                 "tr": tr,
                 "name": name,
                 "total_score": tot,
-                "task_scores": task_scores
+                "task_scores": task_scores,
+                "note": note
             })
             tr += 1
 
@@ -305,12 +308,15 @@ def _parse_xlsx(file_path: str, criteria: Optional[List[Dict[str, Any]]] = None,
                     break
 
             task_scores = distribute_score_to_tasks(tot, criteria) if criteria else [None] * 5
+            from excel_service import generate_bsb_student_note
+            note = generate_bsb_student_note(tot, max_score, task_scores, criteria)
 
             students.append({
                 "tr": tr,
                 "name": name,
                 "total_score": tot,
-                "task_scores": task_scores
+                "task_scores": task_scores,
+                "note": note
             })
             tr += 1
 
