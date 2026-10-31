@@ -5,7 +5,7 @@ import asyncio
 import re
 from typing import List, Dict, Any, Optional, Callable, Tuple
 import google.generativeai as genai
-from PIL import Image
+from PIL import Image, ImageOps
 
 from config import GEMINI_KEYS
 from queue_manager import queue_manager
@@ -18,6 +18,7 @@ class AIService:
             return None
         try:
             img = Image.open(path)
+            img = ImageOps.exif_transpose(img) or img
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")
             max_dim = 1600
