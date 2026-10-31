@@ -2528,16 +2528,16 @@ async def mode6_journal_doc(message: types.Message, state: FSMContext):
 
     status_msg = await message.answer("⏳ **Jurnal o‘qilmoqda va dars baholariga mos CHSB hisoboti tayyorlanmoqda...**")
     try:
-        # 1. Parse averages
-        averages = await ai_service.parse_journal_averages(jpath)
+        # 1. Parse averages & class name using universal parser
+        detected_cname, averages = await ai_service.parse_journal_data(jpath)
         if not averages:
             await status_msg.edit_text("❌ Jurnaldan o‘quvchilar va ularning baholarini o‘qib bo‘lmadi. Iltimos, eMaktab jurnali faylini to‘g‘ri formatda yuboring.")
             return
 
-        # 2. Extract class name
         import re
         cname_match = re.search(r"(\d+[-_]?[a-zA-Zа-яА-Я]*)", message.document.file_name or "")
-        detected_cname = cname_match.group(1).upper().replace("_", "-") if cname_match else "9-sinf"
+        if detected_cname == "9-sinf" and cname_match:
+            detected_cname = cname_match.group(1).upper().replace("_", "-") 
 
         # 3. Generate instant report from averages
         report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname)
@@ -2575,13 +2575,13 @@ async def mode6_journal_photo(message: types.Message, state: FSMContext):
 
     status_msg = await message.answer("⏳ **Jurnal fotosurati tahlil qilinmoqda va CHSB hisoboti tayyorlanmoqda...**")
     try:
-        averages = await ai_service.parse_journal_averages(jpath)
+        detected_cname, averages = await ai_service.parse_journal_data(jpath)
         if not averages:
             await status_msg.edit_text("❌ Jurnal fotosuratidan baholarni aniqlab bo‘lmadi. eMaktabdan Excel formatida yuklash tavsiya etiladi.")
             return
 
-        cname = "9-sinf"
-        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=cname)
+        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname)
+        cname = detected_cname
 
         out_excel = f"temp/{message.from_user.id}_{cname}_chsb_bahoga_moslangan.xlsx"
         build_chsb_excel(report_data, out_excel)

@@ -27,59 +27,161 @@ class AIService:
             logger.warning(f"Error optimizing image {path}: {e}")
             return Image.open(path)
 
-    async def parse_journal_averages(self, journal_path: str) -> Dict[str, float]:
+    async def parse_journal_data(self, journal_path: str) -> Tuple[str, Dict[str, float]]:
+        """
+        Universal eMaktab journal parser:
+        Handles CSV, TSV, binary .xls (xlrd), real .xlsx (openpyxl), and Gemini Vision fallback for images/PDFs.
+        Returns: (detected_class_name, {student_name: avg_grade})
+        """
         if not journal_path or not os.path.exists(journal_path):
-            return {}
+            return ("9-sinf", {})
 
-        fname = journal_path.lower()
-        if fname.endswith(".xlsx") or fname.endswith(".xls"):
-            try:
-                import openpyxl, re
-                wb = openpyxl.load_workbook(journal_path, data_only=True)
-                sheet = wb.active
-                res = {}
-                for r in range(1, sheet.max_row + 1):
-                    name_val = str(sheet.cell(r, 2).value or "").strip()
-                    words = name_val.split()
-                    if len(words) >= 2 and not any(k in name_val.lower() for k in ["familiya", "sharifi", "f.i.o", "o‘quvchi", "sinf", "tahlil", "viloyat"]):
+        detected_cname = "9-sinf"
+        res = {}
+
+        # 1. Try reading as Text / CSV / TSV (eMaktab very often exports CSV with .xls extension)
+        try:
+            with open(journal_path, "rb") as f:
+                raw_bytes = f.read(500000)
+
+            for enc in ["utf-8-sig", "utf-8", "windows-1251", "cp1251", "latin1"]:
+                try:
+                    text = raw_bytes.decode(enc)
+                    if "," in text or ";" in text or "\t" in text:
+                        delim = "," if text.count(",") > text.count(";") else (";" if text.count(";") > text.count("\t") else "\t")
+                        import csv, io
+                        reader = csv.reader(io.StringIO(text), delimiter=delim)
+                        for row in reader:
+                            if not row:
+                                continue
+                            row_str = " ".join(row)
+                            if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
+                                m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
+                                if m:
+                                    detected_cname = m.group(1).upper().replace("_", "-")
+
+                            if len(row) >= 3:
+                                col0 = row[0].strip()
+                                col1 = row[1].strip()
+                                if re.match(r"^[0-9]+(?:\.[0-9]+)?$", col0) and len(col1.split()) >= 2 and not any(k in col1.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi"]):
+                                    grades = []
+                                    for val in row[3:]:
+                                        v = val.strip().replace(",", ".")
+                                        if re.match(r"^[0-9]+(?:\.[0-9]+)?$", v):
+                                            num = float(v)
+                                            if 1.0 <= num <= 50.0:
+                                                grades.append(num)
+                                    daily = [g for g in grades if g <= 10.0]
+                                    if daily:
+                                        avg = round(sum(daily) / len(daily), 1)
+                                        res[col1] = avg
+                        if len(res) >= 3:
+                            return (detected_cname, res)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Text/CSV parse error: {e}")
+
+        # 2. Try xlrd for binary .xls
+        try:
+            import xlrd
+            book = xlrd.open_workbook(journal_path)
+            sheet = book.sheet_by_index(0)
+            for r in range(sheet.nrows):
+                row_vals = [str(sheet.cell_value(r, c)).strip() for c in range(sheet.ncols)]
+                row_str = " ".join(row_vals)
+                if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
+                    m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
+                    if m:
+                        detected_cname = m.group(1).upper().replace("_", "-")
+
+                if len(row_vals) >= 3:
+                    col0 = row_vals[0]
+                    col1 = row_vals[1]
+                    if re.match(r"^[0-9]+(?:\.[0-9]+)?$", col0) and len(col1.split()) >= 2 and not any(k in col1.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi"]):
                         grades = []
-                        for c in range(3, sheet.max_column + 1):
+                        for val in row_vals[3:]:
+                            v = str(val).strip().replace(",", ".")
+                            if re.match(r"^[0-9]+(?:\.[0-9]+)?$", v):
+                                num = float(v)
+                                if 1.0 <= num <= 50.0:
+                                    grades.append(num)
+                        daily = [g for g in grades if g <= 10.0]
+                        if daily:
+                            avg = round(sum(daily) / len(daily), 1)
+                            res[col1] = avg
+            if len(res) >= 3:
+                return (detected_cname, res)
+        except Exception:
+            pass
+
+        # 3. Try openpyxl for real .xlsx
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(journal_path, data_only=True)
+            sheet = wb.active
+            for r in range(1, sheet.max_row + 1):
+                row_vals = [str(sheet.cell(r, c).value or "").strip() for c in range(1, min(sheet.max_column + 1, 35))]
+                row_str = " ".join(row_vals)
+                if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
+                    m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
+                    if m:
+                        detected_cname = m.group(1).upper().replace("_", "-")
+
+                if len(row_vals) >= 2:
+                    col0 = row_vals[0]
+                    col1 = row_vals[1] if len(row_vals) > 1 else ""
+                    name_candidate = col1 if len(col1.split()) >= 2 else col0
+                    if len(name_candidate.split()) >= 2 and not any(k in name_candidate.lower() for k in ["familiya", "f.i.o", "o'quvchi", "o‘quvchi", "sinf", "tahlil"]):
+                        grades = []
+                        for c in range(2, min(sheet.max_column + 1, 35)):
                             val = sheet.cell(r, c).value
                             if val is not None:
                                 try:
-                                    s = str(val).replace(",", ".")
+                                    s = str(val).replace(",", ".").strip()
                                     num = float(re.findall(r"^[0-9]+(?:\.[0-9]+)?", s)[0])
-                                    if 1 <= num <= 50:
+                                    if 1.0 <= num <= 50.0:
                                         grades.append(num)
                                 except:
                                     pass
-                        if grades:
-                            avg = round(sum(grades) / len(grades), 1)
-                            res[name_val] = avg
-                if res:
-                    return res
-            except Exception as e:
-                logger.warning(f"Excel journal parse error: {e}")
+                        daily = [g for g in grades if g <= 10.0]
+                        if daily:
+                            avg = round(sum(daily) / len(daily), 1)
+                            res[name_candidate] = avg
+            if len(res) >= 3:
+                return (detected_cname, res)
+        except Exception:
+            pass
 
-        # If image, PDF or excel fallback, use Gemini
+        # 4. If image or PDF, fallback to Gemini Vision
         prompt = """
-Ushbu eMaktab elektron jurnali sahifasidagi barcha o'quvchilarning ism-familiyasi va ularning darslardagi baholari o'rtachasini (1-10 ballik tizim bo'yicha) aniqlang.
+Ushbu eMaktab elektron jurnali sahifasidagi sinf nomi (masalan: 9-V yoki 9-A) va barcha o'quvchilarning ism-familiyasi hamda ularning darslardagi baholari o'rtachasini (1-10 ballik tizim bo'yicha) aniqlang.
 Quyidagi JSON formatida qaytaring:
 {
+  "class_name": "9-V",
   "students": [
-    {"name": "Abduxamidov Umidjon", "avg": 7.6},
-    {"name": "Ergashova Shaxnozaxon", "avg": 9.0}
+    {"name": "Erkayev Umidjon", "avg": 8.0},
+    {"name": "Ibragimov Azizbek", "avg": 9.0}
   ]
 }
 Javob FAQAT sof JSON bo'lsin.
 """
         try:
-            res = await queue_manager.execute_task(self._send_prompt_to_gemini, prompt, [journal_path])
-            st_list = res.get("students", [])
-            return {st.get("name"): float(st.get("avg", 7.0)) for st in st_list if st.get("name")}
+            gem_res = await queue_manager.execute_task(self._send_prompt_to_gemini, prompt, [journal_path])
+            if isinstance(gem_res, dict):
+                detected_cname = gem_res.get("class_name") or detected_cname
+                st_list = gem_res.get("students", [])
+                for st in st_list:
+                    if st.get("name"):
+                        res[st["name"]] = float(st.get("avg", 7.0))
         except Exception as ge:
             logger.error(f"Gemini journal parse error: {ge}")
-            return {}
+
+        return (detected_cname, res)
+
+    async def parse_journal_averages(self, journal_path: str) -> Dict[str, float]:
+        _, averages = await self.parse_journal_data(journal_path)
+        return averages
 
     def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf") -> Dict[str, Any]:
         """
