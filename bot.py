@@ -620,7 +620,7 @@ async def handle_my_chat_member(event: types.ChatMemberUpdated):
         db_service.save_setting("archive_channel_id", CURRENT_ARCHIVE_ID)
         logger.info(f"Bot kanal/guruhga a'zo qilindi va saqlandi: {CURRENT_ARCHIVE_ID}")
 
-@dp.message(F.forward_origin)
+@dp.message(F.from_user.id == ADMIN_ID, F.forward_origin.type == "channel")
 async def handle_forward_origin(message: types.Message):
     global CURRENT_ARCHIVE_ID
     origin = message.forward_origin
@@ -636,7 +636,7 @@ async def handle_forward_origin(message: types.Message):
             parse_mode="Markdown"
         )
 
-@dp.message(F.forward_from_chat)
+@dp.message(F.from_user.id == ADMIN_ID, F.forward_from_chat.type == "channel")
 async def handle_forward(message: types.Message):
     global CURRENT_ARCHIVE_ID
     if message.forward_from_chat and message.forward_from_chat.type == "channel":
