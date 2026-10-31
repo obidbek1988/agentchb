@@ -211,10 +211,10 @@ Javob FAQAT sof JSON bo'lsin.
             rng = random.Random(seed)
 
             if avg_grade >= 9.0:
-                # 5 baho (35 - 40 ball): 0 to 2 wrong
-                num_wrong = rng.choice([0, 1, 1, 2])
+                # 5 baho (35 - 38 ball): 1 to 2 wrong (hech qachon 40 dan 40 chiqmasin, haqiqatga mos bo'lishi uchun)
+                num_wrong = rng.choice([1, 1, 2])
                 wrong_pool = q_q + m_q
-                wrong = sorted(rng.sample(wrong_pool, num_wrong)) if num_wrong else []
+                wrong = sorted(rng.sample(wrong_pool, num_wrong))
                 baho_num = 5
             elif avg_grade >= 7.0:
                 # 4 baho (27 - 34 ball): 2 to 4 wrong
@@ -241,6 +241,18 @@ Javob FAQAT sof JSON bo'lsin.
             q_score = round(sum(2.4 for q in q_q if q not in wrong), 1)
             m_score = sum(5.0 for q in m_q if q not in wrong)
             total = round(b_score + q_score + m_score, 1)
+
+            # Qat'iy talab: 40 dan 40 chiqarmaslik, haqiqatga mos bo'lishi uchun
+            if total >= 40.0:
+                forced = rng.choice(q_q)
+                if forced not in wrong:
+                    wrong.append(forced)
+                    wrong.sort()
+                b_score = sum(2.0 for q in b_q if q not in wrong)
+                q_score = round(sum(2.4 for q in q_q if q not in wrong), 1)
+                m_score = sum(5.0 for q in m_q if q not in wrong)
+                total = round(b_score + q_score + m_score, 1)
+
             if total.is_integer():
                 total = int(total)
 
@@ -506,6 +518,13 @@ Siz tajribali o'qituvchisiz.
 {adj_desc}
 Keyingi rasmlar: O'quvchilarning daftardagi yoki qog'ozdagi yozma ishlari.
 
+YOZMA ISHLARNI TEKSHIRISH VA BIRLASHTIRISH QOIDALARI:
+1. KO'P VARAQLI ISHLARNI BIRLASHTIRISH (1-8 VARAQ):
+   O'quvchi yozma ishni 1 ta, 2 ta, 4 ta yoki 8 tagacha varaqda yozgan bo'lishi mumkin.
+   O'quvchi F.I.O faqat 1-sahifada bo'ladi. Keyingi sahifalarda yangi ism bo'lmasa, ularni yangi o'quvchi deb ochmang — oldingi o'quvchining davomi deb bitta o'quvchiga jamlang!
+2. HAQIQATGA MOSLIK:
+   O'rtacha bahoga moslashda 50 dan 50 (100%) ball chiqarmang, 44-48 ball oralig'iga moslansin.
+
 Har bir o'quvchining ishini mezonga va to'g'ri javoblar kalitiga qarab tekshiring:
 - O'quvchining ism-familiyasini aniqlang;
 - Har bir topshiriq uchun to'g'riligiga qarab ball bering;
@@ -672,12 +691,23 @@ Siz test javoblarini tekshiruvchi mutaxassissiz.
 {adj_desc}
 Keyingi rasmlar: O'quvchilarning belgilagan test javoblari varaqalari rasmlari.
 
+TEST JAVOBLARINI O'QISH VA BAHOLASHNING QAT'IY QOIDALARI:
+1. JAVOBLAR JADVALI (ORQADAGI KALIT) USTUVOR (PRIORITET 1):
+   Agar test varaqasida (ayniqsa varaqning orqa tomonida yoki pastki qismida) o'quvchi to'ldirgan 1 dan 15 gacha bo'lgan Javoblar jadvali / kalit matrisi mavjud bo'lsa — BIRINCHI NAVBATDA o'sha jadvaldagi javob harflarini (A, B, C, D) asosiy javob sifatida oling!
+2. TEST SAVOLLARIDAGI BELGILAR (PRIORITET 2):
+   Agar javoblar jadvali to'ldirilmagan, bo'sh yoki mavjud bo'lmasa — faqat shundagina savollarning o'zida doiraga olingan yoki belgilangan variantlarni oling.
+3. KO'P VARAQLI ISHLARNI BIRLASHTIRISH (1-8 VARAQ):
+   Bitta o'quvchining ishi 1 ta, 2 ta, 4 ta yoki 8 tagacha rasmlardan iborat bo'lishi mumkin (masalan, oldi va orqa tomoni yoki bir nechta sahifa).
+   O'quvchi F.I.O odatda 1-sahifada bo'ladi. Keyingi sahifalarda yangi ism bo'lmasa, ularni yangi o'quvchi deb ochmang — oldingi o'quvchining davomi deb birlashtiring.
+4. HAQIQATGA MOSLIK (40 dan 40 chiqarmaslik):
+   Bahoga moslash rejimida hech qachon 40 dan 40 (100%) ball chiqarmang. A'lochi o'quvchilarda ham kamida 1-2 ta xato bo'lsin (35-38 ball oralig'i).
+
 Vazifangiz:
-Har bir o'quvchining belgilagan javoblarini to'g'ri kalit va baholash mezoni bilan solishtirib tekshiring:
+Har bir o'quvchining belgilagan javoblarini to'g'ri kalit va baholash mezoni bilan yuqoridagi qoidalar asosida tekshiring:
 - O'quvchi F.I.O;
 - To'g'ri topilgan testlar ballarini hisoblang: (B) Bilish, (Q) Qo'llash, (M) Mulohaza mezonlari bo'yicha ajrating;
-- Jami to'plagan ballini hisoblang (maksimal 40 ball);
-- Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: nechta to'g'ri, nechta xato va qaysi savollarda adashgani (masalan: "12 to'g'ri, 3 xato (4, 9, 14-testlar)");
+- Jami to'plagan ballini hisoblang (maksimal 40 ball, hech qachon 40/40 bo'lmasin);
+- Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: nechta to'g'ri, nechta xato va qaysi savollarda adashgani (masalan: "13 to'g'ri, 2 xato (4, 15-testlar)");
 - Tartib raqami (tr) {start_tr} dan boshlansin.
 
 Quyidagi JSON formatida qaytaring:
