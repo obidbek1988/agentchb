@@ -838,6 +838,11 @@ Javob FAQAT sof JSON bo'lsin.
 
             await asyncio.sleep(0.5)
 
+        if not final_info:
+            final_info = {}
+        final_info["key_dict"] = scoring_cfg.get("key_dict", {})
+        key_list = [f"{q}-{scoring_cfg['key_dict'].get(q, '')}" for q in range(1, scoring_cfg.get("total_questions", 15) + 1) if scoring_cfg.get("key_dict", {}).get(q)]
+        final_info["keys_str"] = ", ".join(key_list)
         return {
             "school_info": final_info,
             "students": all_students

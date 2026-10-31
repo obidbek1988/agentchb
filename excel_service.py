@@ -385,6 +385,28 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     chsb_number = school_info.get("chsb_number", 1)
     max_score = school_info.get("max_score", 40)
 
+    # To'g'ri javoblar kalitini aniqlash (1-15 gacha)
+    key_dict = school_info.get("key_dict") or {}
+    if not key_dict and "keys_str" in school_info:
+        from ai_service import parse_keys_string
+        key_dict = parse_keys_string(school_info["keys_str"])
+    if not key_dict:
+        from ai_service import parse_keys_string
+        from criteria_store import get_chsb_for_grade
+        raw_k = data.get("keys_text") or data.get("keys_str") or ""
+        if raw_k:
+            key_dict = parse_keys_string(raw_k)
+        else:
+            cfg = get_chsb_for_grade(school_info.get("class_name", "9"), subject=school_info.get("subject", "Informatika"), lang=lang) or get_chsb_for_grade("9")
+            if cfg:
+                key_dict = cfg.get("key_dict", {})
+    if not key_dict:
+        key_dict = {1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C', 6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B', 11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'}
+
+    total_q = max(max(key_dict.keys(), default=15), 15)
+    key_items = [f"{q}-{key_dict.get(q, '')}" for q in range(1, total_q + 1) if key_dict.get(q)]
+    correct_keys_formatted = ", ".join(key_items)
+
     if lang == "ru":
         class_name = school_info.get("class_name", "9-класс")
         subject = school_info.get("subject", "Информатика")
@@ -404,7 +426,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
             ("F2", f"Итоговый балл\n{max_score}", fill_hdr_score, font_hdr_score),
             ("G2", "Процент\n100%", fill_hdr_pct, font_hdr_pct),
             ("H2", "Анализ / Краткий комментарий\n(Ошибки и верные ответы)", fill_hdr_note, font_hdr_note),
-            ("I2", "Ответы, отмеченные учащимся\n(1–15 ответы теста)", fill_hdr_gray, font_header)
+            ("I2", f"Ответы, отмеченные учащимся (1–15 ответы теста)\n\nПравильные ответы:\n{correct_keys_formatted}", fill_hdr_gray, font_header)
         ]
     else:
         class_name = to_uzbek_latin(school_info.get("class_name", ""))
@@ -425,7 +447,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
             ("F2", f"Jami ball\n{max_score}", fill_hdr_score, font_hdr_score),
             ("G2", "Foizi\n100%", fill_hdr_pct, font_hdr_pct),
             ("H2", "Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)", fill_hdr_note, font_hdr_note),
-            ("I2", "O‘quvchi belgilagan kalitlar\n(1–15 test javoblari)", fill_hdr_gray, font_header)
+            ("I2", f"O‘quvchi belgilagan kalitlar (1–15 test javoblari)\n\nTo‘g‘ri kalit:\n{correct_keys_formatted}", fill_hdr_gray, font_header)
         ]
 
     ws.merge_cells("A1:G1")
@@ -443,7 +465,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         cell.border = thin_border
 
-    ws.row_dimensions[2].height = 95
+    ws.row_dimensions[2].height = 105
 
     start_row = 3
     for idx, st in enumerate(students, start=1):
@@ -538,7 +560,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.column_dimensions["F"].width = 10
     ws.column_dimensions["G"].width = 9
     ws.column_dimensions["H"].width = 60
-    ws.column_dimensions["I"].width = 48
+    ws.column_dimensions["I"].width = 52
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
