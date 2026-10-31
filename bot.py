@@ -2269,7 +2269,9 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
     is_text_crit = bool(ctext)
     crit_input = ctext if is_text_crit else cpath
 
-    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**\n\nAI {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti va mezoni bilan solishtirmoqda (taxminan 15–25 soniya)...")
+    pos, eta = queue_manager.get_queue_info()
+    queue_note = f"\n🚦 **Navbatdagi o‘rningiz: №{pos}** (kutilmoqda: ~{eta} soniya)\n" if pos > 1 else ""
+    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**{queue_note}\n\nAI {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti va mezoni bilan solishtirmoqda...")
 
     async def update_progress(text):
         try:
