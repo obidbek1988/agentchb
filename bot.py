@@ -2129,8 +2129,51 @@ async def mode4_student_tests_back(message: types.Message, state: FSMContext):
     keys_text = data.get("keys_text", "")
     await show_m4_keys_card(message, keys_text)
 
+_m4_batch_tasks = {}
+
+async def _trigger_m4_batch_notice(message, user_id):
+    await asyncio.sleep(0.7)
+    tlist = db_service.get_session_files(user_id, "m4")
+    count = len(tlist)
+    if count == 0:
+        return
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({count} ta o‘quvchi)", callback_data="m4_finish_now")],
+        [InlineKeyboardButton(text="⚡ Faqat oxirgi 1 ta rasmni tekshirish", callback_data="m4_single_image_process")]
+    ])
+    try:
+        await message.answer(
+            f"📥 **Jami {count} ta o‘quvchi test varaqasi qabul qilindi!**\n\n"
+            f"• Yana o‘quvchilar bo‘lsa, rasmlarini yuboravering;\n"
+            f"• Barcha rasmlarni yuborib bo‘lgach, hisobotni tayyorlash uchun pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing!",
+            reply_markup=ikb,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning(f"Batch notice error: {e}")
+
+async def _ensure_m4_keys_configured(state: FSMContext):
+    data = await state.get_data()
+    if not data.get("keys_text") and not data.get("keys_path"):
+        grade = data.get("grade", "9")
+        subject = data.get("subject", "Informatika")
+        lang = data.get("lang", "uz")
+        chsb_info = get_chsb_for_grade(grade, subject=subject, lang=lang) or get_chsb_for_grade("9")
+        if chsb_info:
+            await state.update_data(
+                grade=grade,
+                subject=subject,
+                lang=lang,
+                criteria_text=f"CHSB mezoni: {chsb_info.get('distribution_summary', '')}",
+                keys_text=chsb_info.get("keys", "")
+            )
+    await state.set_state(BotStates.m4_student_tests)
+
+@dp.message(BotStates.m4_select_grade_or_custom, F.document)
+@dp.message(BotStates.m4_keys, F.document)
 @dp.message(BotStates.m4_student_tests, F.document)
 async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
+    await _ensure_m4_keys_configured(state)
     fname = (message.document.file_name or "").lower()
     if fname.endswith(".pdf"):
         os.makedirs("temp", exist_ok=True)
@@ -2138,9 +2181,9 @@ async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
         await bot.download(message.document, destination=pdf_path)
         try:
             images = pdf_to_images(pdf_path)
-            data = await state.get_data()
-            tlist = data.get("test_paths", [])
-            tlist.extend(images)
+            for im in images:
+                db_service.save_session_file(message.from_user.id, "m4", im)
+            tlist = db_service.get_session_files(message.from_user.id, "m4")
             await state.update_data(test_paths=tlist)
             ikb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(tlist)} ta o‘quvchi)", callback_data="m4_finish_now")]
@@ -2155,11 +2198,25 @@ async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
         except Exception as e:
             logger.error(f"Mode 4 Test PDF error: {e}")
             await message.answer("❌ PDF faylni ochishda xatolik yuz berdi.")
+    elif any(fname.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".heic"]):
+        os.makedirs("temp", exist_ok=True)
+        tpath = f"temp/m4_t_{message.from_user.id}_{message.message_id}.jpg"
+        await bot.download(message.document, destination=tpath)
+        db_service.save_session_file(message.from_user.id, "m4", tpath)
+        tlist = db_service.get_session_files(message.from_user.id, "m4")
+        await state.update_data(test_paths=tlist)
+        uid = message.from_user.id
+        if uid in _m4_batch_tasks and not _m4_batch_tasks[uid].done():
+            _m4_batch_tasks[uid].cancel()
+        _m4_batch_tasks[uid] = asyncio.create_task(_trigger_m4_batch_notice(message, uid))
     else:
         await message.answer("Iltimos, o‘quvchilar test varaqalarini rasm yoki PDF formatida yuboring.")
 
+@dp.message(BotStates.m4_select_grade_or_custom, F.photo)
+@dp.message(BotStates.m4_keys, F.photo)
 @dp.message(BotStates.m4_student_tests, F.photo)
 async def mode4_photo(message: types.Message, state: FSMContext):
+    await _ensure_m4_keys_configured(state)
     os.makedirs("temp", exist_ok=True)
     tpath = f"temp/m4_t_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=tpath)
@@ -2168,17 +2225,10 @@ async def mode4_photo(message: types.Message, state: FSMContext):
     tlist = db_service.get_session_files(message.from_user.id, "m4")
     await state.update_data(test_paths=tlist)
 
-    ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🚀 Hisobotni tayyorlash ({len(tlist)} ta o‘quvchi)", callback_data="m4_finish_now")],
-        [InlineKeyboardButton(text="⚡ Faqat shu 1 ta rasmni tekshirish", callback_data="m4_single_image_process")]
-    ])
-    await message.answer(
-        f"📥 **{len(tlist)}-o‘quvchi test varaqasi qabul qilindi!**\n\n"
-        f"• Yana o‘quvchilar bo‘lsa, rasmlarini yuboravering;\n"
-        f"• Hisobotni chiqarish uchun pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing!",
-        reply_markup=ikb,
-        parse_mode="Markdown"
-    )
+    uid = message.from_user.id
+    if uid in _m4_batch_tasks and not _m4_batch_tasks[uid].done():
+        _m4_batch_tasks[uid].cancel()
+    _m4_batch_tasks[uid] = asyncio.create_task(_trigger_m4_batch_notice(message, uid))
 
 @dp.callback_query(F.data == "m4_single_image_process")
 async def cb_m4_single(callback: CallbackQuery, state: FSMContext):
