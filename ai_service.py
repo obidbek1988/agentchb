@@ -263,12 +263,30 @@ Javob FAQAT sof JSON bo'lsin.
             else:
                 note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
 
+            # 1 dan 15 gacha o'quvchi belgilagan kalitlar qatori (xatolar ❌ bilan)
+            OFFICIAL_KEYS_9 = {
+                1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C',
+                6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B',
+                11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'
+            }
+            student_keys = []
+            for q_num in range(1, 16):
+                corr = OFFICIAL_KEYS_9.get(q_num, "A")
+                if q_num in wrong:
+                    wrong_choices = [c for c in ["A", "B", "C", "D"] if c != corr]
+                    picked = rng.choice(wrong_choices)
+                    student_keys.append(f"{q_num}-{picked} ❌")
+                else:
+                    student_keys.append(f"{q_num}-{corr}")
+            keys_str = ", ".join(student_keys)
+
             students.append({
                 "tr": idx,
                 "name": name,
                 "total_score": total,
                 "task_scores": [b_score, q_score, m_score],
-                "note": note
+                "note": note,
+                "keys_str": keys_str
             })
 
         return {
@@ -708,6 +726,7 @@ Har bir o'quvchining belgilagan javoblarini to'g'ri kalit va baholash mezoni bil
 - To'g'ri topilgan testlar ballarini hisoblang: (B) Bilish, (Q) Qo'llash, (M) Mulohaza mezonlari bo'yicha ajrating;
 - Jami to'plagan ballini hisoblang (maksimal 40 ball, hech qachon 40/40 bo'lmasin);
 - Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: nechta to'g'ri, nechta xato va qaysi savollarda adashgani (masalan: "13 to'g'ri, 2 xato (4, 15-testlar)");
+- Har bir o'quvchi belgilagan test javoblari kalitini 'keys_str' qatoriga yozing (masalan: "1-C, 2-A, 3-D, 4-A ❌, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-B ❌", xato javoblarga ❌ qo'ying);
 - Tartib raqami (tr) {start_tr} dan boshlansin.
 
 Quyidagi JSON formatida qaytaring:
@@ -727,7 +746,8 @@ Quyidagi JSON formatida qaytaring:
       "name": "O'quvchi F.I.O",
       "total_score": 34,
       "task_scores": [6, 20, 8],
-      "note": "12 to'g'ri, 3 xato (4, 9, 14-testlar)"
+      "note": "12 to'g'ri, 3 xato (4, 9, 14-testlar)",
+      "keys_str": "1-C, 2-A, 3-D, 4-A ❌, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-B ❌"
     }}
   ]
 }}

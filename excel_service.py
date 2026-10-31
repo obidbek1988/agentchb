@@ -146,6 +146,9 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.cell(row=sig_row, column=1, value=f"Fan o‘qituvchisi:____________________  {teacher_name}").font = font_bold
     ws.cell(row=sig_row+1, column=1, value=f"Metod birlashma rahbari:_______________ {head_teacher}").font = font_bold
 
+    # Printerdan chiqarganda FOIZ ustunigacha (A dan I gacha) chiqsin
+    ws.print_area = f"A1:I{sig_row+1}"
+
     ws.column_dimensions["A"].width = 4.5
     ws.column_dimensions["B"].width = 25
     ws.column_dimensions["C"].width = 14
@@ -196,7 +199,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {chsb_number}-CHSB ({max_score} ball) test natijalari"
     )
 
-    ws.merge_cells("A1:H1")
+    ws.merge_cells("A1:G1")
     c_a1 = ws["A1"]
     c_a1.value = title_text
     c_a1.font = font_title
@@ -212,7 +215,8 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         ("E2", "(M) – Mulohaza,\nhar bir to‘g‘ri javob uchun – 5 balldan,\njami 10 ball;"),
         ("F2", f"Jami ball\n{max_score}"),
         ("G2", "Foizi\n100%"),
-        ("H2", "Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)")
+        ("H2", "Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)"),
+        ("I2", "O‘quvchi belgilagan kalitlar\n(1–15 test javoblari)")
     ]
 
     for coord, txt in chsb_headers:
@@ -272,6 +276,12 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
         c_h.border = thin_border
         c_h.font = font_data
 
+        keys_val = st.get("keys_str") or st.get("student_keys", "")
+        c_i = ws.cell(row=curr_row, column=9, value=keys_val)
+        c_i.alignment = Alignment(horizontal="left", vertical="center")
+        c_i.border = thin_border
+        c_i.font = font_data
+
         ws.row_dimensions[curr_row].height = 19
 
     end_row = start_row + len(students) - 1
@@ -279,14 +289,18 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.cell(row=sig_row, column=1, value=f"Fan o‘qituvchisi:____________________  {teacher_name}").font = font_bold
     ws.cell(row=sig_row+1, column=1, value=f"Metod birlashma rahbari:_______________ {head_teacher}").font = font_bold
 
+    # Printerdan chiqarganda FOIZ ustunigacha (A dan G gacha) chiqsin
+    ws.print_area = f"A1:G{sig_row+1}"
+
     ws.column_dimensions["A"].width = 5
     ws.column_dimensions["B"].width = 28
-    ws.column_dimensions["C"].width = 20
-    ws.column_dimensions["D"].width = 22
-    ws.column_dimensions["E"].width = 20
-    ws.column_dimensions["F"].width = 11
-    ws.column_dimensions["G"].width = 9
-    ws.column_dimensions["H"].width = 28
+    ws.column_dimensions["C"].width = 17
+    ws.column_dimensions["D"].width = 19
+    ws.column_dimensions["E"].width = 17
+    ws.column_dimensions["F"].width = 10
+    ws.column_dimensions["G"].width = 8
+    ws.column_dimensions["H"].width = 32
+    ws.column_dimensions["I"].width = 48
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
