@@ -376,15 +376,19 @@ def get_grade_selection_keyboard():
             InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m1_universal_criteria")
         ],
         [
-            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="grade_5"),
-            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="grade_6"),
-            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="grade_7"),
-            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="grade_8"),
+            InlineKeyboardButton(text="⚡ 5-sinf (25 ball)", callback_data="grade_5"),
+            InlineKeyboardButton(text="⚡ 6-sinf (30 ball)", callback_data="grade_6"),
         ],
         [
-            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="grade_9"),
-            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="grade_10"),
-            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="grade_11"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25 ball)", callback_data="grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25 ball)", callback_data="grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50 ball)", callback_data="grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50 ball)", callback_data="grade_10"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 11-sinf (50 ball)", callback_data="grade_11"),
         ],
         [
             InlineKeyboardButton(text="👁 Mezonlarni ko‘rish", callback_data="view_criteria_menu")
@@ -398,15 +402,19 @@ def get_grade_selection_keyboard():
 def get_criteria_preview_keyboard():
     inline_kb = [
         [
-            InlineKeyboardButton(text="5-sinf", callback_data="preview_5"),
-            InlineKeyboardButton(text="6-sinf", callback_data="preview_6"),
-            InlineKeyboardButton(text="7-sinf", callback_data="preview_7"),
-            InlineKeyboardButton(text="8-sinf", callback_data="preview_8"),
+            InlineKeyboardButton(text="⚡ 5-sinf (25 ball)", callback_data="preview_5"),
+            InlineKeyboardButton(text="⚡ 6-sinf (30 ball)", callback_data="preview_6"),
         ],
         [
-            InlineKeyboardButton(text="9-sinf", callback_data="preview_9"),
-            InlineKeyboardButton(text="10-sinf", callback_data="preview_10"),
-            InlineKeyboardButton(text="11-sinf", callback_data="preview_11"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25 ball)", callback_data="preview_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25 ball)", callback_data="preview_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50 ball)", callback_data="preview_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50 ball)", callback_data="preview_10"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 11-sinf (50 ball)", callback_data="preview_11"),
         ],
         [
             InlineKeyboardButton(text="⬅️ Tanlash menyusiga qaytish", callback_data="back_to_grades")
@@ -1369,15 +1377,19 @@ async def mode2_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m2_universal_criteria")],
         [
-            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m2_grade_5"),
-            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
-            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
-            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m2_grade_8"),
+            InlineKeyboardButton(text="⚡ 5-sinf (25 ball)", callback_data="m2_grade_5"),
+            InlineKeyboardButton(text="⚡ 6-sinf (30 ball)", callback_data="m2_grade_6"),
         ],
         [
-            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m2_grade_9"),
-            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m2_grade_10"),
-            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m2_grade_11"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25 ball)", callback_data="m2_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25 ball)", callback_data="m2_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50 ball)", callback_data="m2_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50 ball)", callback_data="m2_grade_10"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 11-sinf (50 ball)", callback_data="m2_grade_11"),
         ],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
     ])
@@ -1394,15 +1406,19 @@ async def cb_m2_back_to_grades(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m2_universal_criteria")],
         [
-            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m2_grade_5"),
-            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
-            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
-            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m2_grade_8"),
+            InlineKeyboardButton(text="⚡ 5-sinf (25 ball)", callback_data="m2_grade_5"),
+            InlineKeyboardButton(text="⚡ 6-sinf (30 ball)", callback_data="m2_grade_6"),
         ],
         [
-            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m2_grade_9"),
-            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m2_grade_10"),
-            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m2_grade_11"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25 ball)", callback_data="m2_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25 ball)", callback_data="m2_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50 ball)", callback_data="m2_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50 ball)", callback_data="m2_grade_10"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 11-sinf (50 ball)", callback_data="m2_grade_11"),
         ],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
     ])
@@ -2897,15 +2913,19 @@ async def mode5_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m5_universal_criteria")],
         [
-            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m5_grade_5"),
-            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
-            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
-            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m5_grade_8"),
+            InlineKeyboardButton(text="⚡ 5-sinf (25 ball)", callback_data="m5_grade_5"),
+            InlineKeyboardButton(text="⚡ 6-sinf (30 ball)", callback_data="m5_grade_6"),
         ],
         [
-            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m5_grade_9"),
-            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m5_grade_10"),
-            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m5_grade_11"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25 ball)", callback_data="m5_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25 ball)", callback_data="m5_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50 ball)", callback_data="m5_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50 ball)", callback_data="m5_grade_10"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 11-sinf (50 ball)", callback_data="m5_grade_11"),
         ],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
     ])
@@ -2922,15 +2942,19 @@ async def cb_m5_back_to_grades(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m5_universal_criteria")],
         [
-            InlineKeyboardButton(text="⚡ 5-sinf (25b)", callback_data="m5_grade_5"),
-            InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
-            InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
-            InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="m5_grade_8"),
+            InlineKeyboardButton(text="⚡ 5-sinf (25 ball)", callback_data="m5_grade_5"),
+            InlineKeyboardButton(text="⚡ 6-sinf (30 ball)", callback_data="m5_grade_6"),
         ],
         [
-            InlineKeyboardButton(text="⚡ 9-sinf (50b)", callback_data="m5_grade_9"),
-            InlineKeyboardButton(text="⚡ 10-sinf (50b)", callback_data="m5_grade_10"),
-            InlineKeyboardButton(text="⚡ 11-sinf (50b)", callback_data="m5_grade_11"),
+            InlineKeyboardButton(text="⚡ 7-sinf (25 ball)", callback_data="m5_grade_7"),
+            InlineKeyboardButton(text="⚡ 8-sinf (25 ball)", callback_data="m5_grade_8"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 9-sinf (50 ball)", callback_data="m5_grade_9"),
+            InlineKeyboardButton(text="⚡ 10-sinf (50 ball)", callback_data="m5_grade_10"),
+        ],
+        [
+            InlineKeyboardButton(text="⚡ 11-sinf (50 ball)", callback_data="m5_grade_11"),
         ],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")]
     ])
