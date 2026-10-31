@@ -166,7 +166,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     return output_path
 
 def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
-    """CHSB 40 ball report: (B) Bilish, (Q) Qo'llash, (M) Mulohaza based template"""
+    """CHSB/SOCH 40 ball report: (B/З) Bilish/Znanie, (Q/П) Qo'llash/Primenenie, (M/Р) Mulohaza/Rassujdenie template"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Лист1"
@@ -186,19 +186,56 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     school_info = data.get("school_info", {})
     students = data.get("students", [])
 
-    class_name = to_uzbek_latin(school_info.get("class_name", ""))
-    subject = school_info.get("subject", "Informatika")
+    lang = school_info.get("lang", "uz")
+    if "рус" in str(school_info.get("class_name", "")).lower() or "rus" in str(school_info.get("class_name", "")).lower() or lang == "ru":
+        lang = "ru"
+
     quarter = school_info.get("quarter", 1)
     chsb_number = school_info.get("chsb_number", 1)
     max_score = school_info.get("max_score", 40)
-    teacher_name = to_uzbek_latin(school_info.get("teacher_name", "Qobilov Obidjon"))
-    head_teacher = to_uzbek_latin(school_info.get("head_teacher", "Mahmudova Dilfuzaxon"))
 
-    title_text = (
-        "CHSB test tahlil Bayonnomasi\n"
-        f"FARG‘ONA viloyati FARG‘ONA SHAHRI 26-umumta’lim maktabi\n"
-        f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {chsb_number}-CHSB ({max_score} ball) test natijalari"
-    )
+    if lang == "ru":
+        class_name = school_info.get("class_name", "9-класс")
+        subject = school_info.get("subject", "Информатика")
+        teacher_name = school_info.get("teacher_name", "Кабилов Обиджон")
+        head_teacher = school_info.get("head_teacher", "Махмудова Дильфузахон")
+        title_text = (
+            "Протокол анализа результатов СОЧ\n"
+            f"ФЕРГАНСКАЯ область город ФЕРГАНА общеобразовательная школа №26\n"
+            f"Результаты СОЧ-1 ({max_score} баллов) по предмету «{subject}» учащихся {class_name} за {quarter}-ю четверть"
+        )
+        chsb_headers = [
+            ("A2", "№"),
+            ("B2", "Ф.И.О. учащихся"),
+            ("C2", "(З) – Знание,\nза каждый верный ответ – 2 балла,\nвсего 6 баллов;"),
+            ("D2", "(П) – Применение,\nза каждый верный ответ – 2,4 балла,\nвсего 24 балла;"),
+            ("E2", "(Р) – Рассуждение,\nза каждый верный ответ – 5 баллов,\nвсего 10 баллов;"),
+            ("F2", f"Итоговый балл\n{max_score}"),
+            ("G2", "Процент\n100%"),
+            ("H2", "Анализ / Краткий комментарий\n(Ошибки и верные ответы)"),
+            ("I2", "Ответы, отмеченные учащимся\n(1–15 ответы теста)")
+        ]
+    else:
+        class_name = to_uzbek_latin(school_info.get("class_name", ""))
+        subject = school_info.get("subject", "Informatika")
+        teacher_name = to_uzbek_latin(school_info.get("teacher_name", "Qobilov Obidjon"))
+        head_teacher = to_uzbek_latin(school_info.get("head_teacher", "Mahmudova Dilfuzaxon"))
+        title_text = (
+            "CHSB test tahlil Bayonnomasi\n"
+            f"FARG‘ONA viloyati FARG‘ONA SHAHRI 26-umumta’lim maktabi\n"
+            f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {chsb_number}-CHSB ({max_score} ball) test natijalari"
+        )
+        chsb_headers = [
+            ("A2", "t/r"),
+            ("B2", "O‘quvchilarning ism-sharifi"),
+            ("C2", "(B) – Bilish,\nhar bir to‘g‘ri javob uchun – 2 balldan,\njami 6 ball;"),
+            ("D2", "(Q) – Qo‘llash,\nhar bir to‘g‘ri javob uchun – 2,4 balldan,\njami 24 ball;"),
+            ("E2", "(M) – Mulohaza,\nhar bir to‘g‘ri javob uchun – 5 balldan,\njami 10 ball;"),
+            ("F2", f"Jami ball\n{max_score}"),
+            ("G2", "Foizi\n100%"),
+            ("H2", "Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)"),
+            ("I2", "O‘quvchi belgilagan kalitlar\n(1–15 test javoblari)")
+        ]
 
     ws.merge_cells("A1:G1")
     c_a1 = ws["A1"]
@@ -206,19 +243,6 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     c_a1.font = font_title
     c_a1.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.row_dimensions[1].height = 45
-
-    # Headers Row 2
-    chsb_headers = [
-        ("A2", "t/r"),
-        ("B2", "O‘quvchilarning ism-sharifi"),
-        ("C2", "(B) – Bilish,\nhar bir to‘g‘ri javob uchun – 2 balldan,\njami 6 ball;"),
-        ("D2", "(Q) – Qo‘llash,\nhar bir to‘g‘ri javob uchun – 2,4 balldan,\njami 24 ball;"),
-        ("E2", "(M) – Mulohaza,\nhar bir to‘g‘ri javob uchun – 5 balldan,\njami 10 ball;"),
-        ("F2", f"Jami ball\n{max_score}"),
-        ("G2", "Foizi\n100%"),
-        ("H2", "Tahlil / Qisqa izoh\n(Xatolar va to‘g‘rilar)"),
-        ("I2", "O‘quvchi belgilagan kalitlar\n(1–15 test javoblari)")
-    ]
 
     for coord, txt in chsb_headers:
         cell = ws[coord]
@@ -232,8 +256,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     start_row = 3
     for idx, st in enumerate(students, start=1):
         curr_row = start_row + idx - 1
-        name = to_uzbek_latin(st.get("name", ""))
-        # Expecting task_scores: [B, Q, M]
+        name = st.get("name", "") if lang == "ru" else to_uzbek_latin(st.get("name", ""))
         bqm = st.get("task_scores", [None, None, None])
         tot = st.get("total_score")
 
@@ -265,14 +288,15 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
 
         c_g = ws.cell(row=curr_row, column=7)
         if tot is not None:
-            c_g.value = f"=IF(F{curr_row}=\"\",\"\",ROUND(F{curr_row}/{max_score}*100,0))"
+            c_g.value = f"=ROUND((F{curr_row}/{max_score})*100, 1)"
         else:
             c_g.value = ""
         c_g.alignment = Alignment(horizontal="center", vertical="center")
         c_g.border = thin_border
         c_g.font = font_data
 
-        c_h = ws.cell(row=curr_row, column=8, value=st.get("note", ""))
+        note = st.get("note", "") if lang == "ru" else to_uzbek_latin(st.get("note", ""))
+        c_h = ws.cell(row=curr_row, column=8, value=note)
         c_h.alignment = Alignment(horizontal="left", vertical="center")
         c_h.border = thin_border
         c_h.font = font_data
@@ -287,8 +311,12 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
 
     end_row = start_row + len(students) - 1
     sig_row = end_row + 2
-    ws.cell(row=sig_row, column=1, value=f"Fan o‘qituvchisi:____________________  {teacher_name}").font = font_bold
-    ws.cell(row=sig_row+1, column=1, value=f"Metod birlashma rahbari:_______________ {head_teacher}").font = font_bold
+    if lang == "ru":
+        ws.cell(row=sig_row, column=1, value=f"Учитель предмета:____________________  {teacher_name}").font = font_bold
+        ws.cell(row=sig_row+1, column=1, value=f"Заместитель директора по УВР:_______________ {head_teacher}").font = font_bold
+    else:
+        ws.cell(row=sig_row, column=1, value=f"Fan o‘qituvchisi:____________________  {teacher_name}").font = font_bold
+        ws.cell(row=sig_row+1, column=1, value=f"Metod birlashma rahbari:_______________ {head_teacher}").font = font_bold
 
     # Printerdan chiqarganda FOIZ ustunigacha (A dan G gacha) chiqsin
     ws.print_area = f"A1:G{sig_row+1}"
@@ -300,7 +328,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.column_dimensions["E"].width = 17
     ws.column_dimensions["F"].width = 10
     ws.column_dimensions["G"].width = 8
-    ws.column_dimensions["H"].width = 32
+    ws.column_dimensions["H"].width = 34
     ws.column_dimensions["I"].width = 48
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)

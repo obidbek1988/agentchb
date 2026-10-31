@@ -195,16 +195,19 @@ Javob FAQAT sof JSON bo'lsin.
         _, averages = await self.parse_journal_data(journal_path)
         return averages
 
-    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf") -> Dict[str, Any]:
+    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf", lang: str = "uz") -> Dict[str, Any]:
         """
         Darsdagi baholarga qarab 40 ballik CHSB hisobotini o'quvchi ishisiz generatsiya qiladi.
-        9, 10 va 11-sinf uchun tegishli B, Q, M taqsimoti va rasmiy kalitlardan foydalanadi.
+        O'zbek va Rus sinflari uchun to'liq moslangan.
         """
         import random
         from criteria_store import get_chsb_for_grade
         from cyrillic_translit import to_uzbek_latin
 
-        chsb_cfg = get_chsb_for_grade(class_name) or get_chsb_for_grade("9")
+        if "рус" in class_name.lower() or "rus" in class_name.lower():
+            lang = "ru"
+
+        chsb_cfg = get_chsb_for_grade(class_name, lang=lang) or get_chsb_for_grade("9", lang=lang)
         b_q = chsb_cfg.get("b_questions", [1, 4, 7])
         q_q = chsb_cfg.get("q_questions", [2, 3, 5, 6, 8, 9, 10, 11, 12, 14])
         m_q = chsb_cfg.get("m_questions", [13, 15])
@@ -262,11 +265,21 @@ Javob FAQAT sof JSON bo'lsin.
                 total = int(total)
 
             correct_count = 15 - len(wrong)
-            if wrong:
-                wrong_str = ', '.join(f'{w}' for w in wrong)
-                note = f"Dars bahosi: {avg_grade} ({baho_num} baho). {correct_count} ta to‘g‘ri, {len(wrong)} ta xato ({wrong_str}-testlar)."
+            if lang == "ru":
+                if wrong:
+                    wrong_str = ', '.join(f'{w}' for w in wrong)
+                    note = f"Оценка за урок: {avg_grade} (оценка {baho_num}). {correct_count} верно, {len(wrong)} ошибок ({wrong_str}-тесты)."
+                else:
+                    note = f"Оценка за урок: {avg_grade} (оценка {baho_num}). Все 15 тестов решены верно (100%)."
+                final_name = name
             else:
-                note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
+                if wrong:
+                    wrong_str = ', '.join(f'{w}' for w in wrong)
+                    note = f"Dars bahosi: {avg_grade} ({baho_num} baho). {correct_count} ta to‘g‘ri, {len(wrong)} ta xato ({wrong_str}-testlar)."
+                else:
+                    note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
+                final_name = to_uzbek_latin(name)
+                note = to_uzbek_latin(note)
 
             student_keys = []
             for q_num in range(1, 16):
@@ -281,22 +294,23 @@ Javob FAQAT sof JSON bo'lsin.
 
             students.append({
                 "tr": idx,
-                "name": to_uzbek_latin(name),
+                "name": final_name,
                 "total_score": total,
                 "task_scores": [b_score, q_score, m_score],
-                "note": to_uzbek_latin(note),
+                "note": note,
                 "keys_str": keys_str
             })
 
         return {
             "school_info": {
-                "class_name": to_uzbek_latin(class_name),
-                "subject": "Informatika",
+                "class_name": class_name if lang == "ru" else to_uzbek_latin(class_name),
+                "subject": "Информатика" if lang == "ru" else "Informatika",
                 "quarter": 1,
                 "chsb_number": 1,
                 "max_score": 40,
-                "teacher_name": "Qobilov Obidjon",
-                "head_teacher": "Mahmudova Dilfuzaxon"
+                "lang": lang,
+                "teacher_name": "Кабилов Обиджон" if lang == "ru" else "Qobilov Obidjon",
+                "head_teacher": "Махмудова Дильфузахон" if lang == "ru" else "Mahmudova Dilfuzaxon"
             },
             "students": students
         }

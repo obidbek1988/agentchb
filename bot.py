@@ -1582,9 +1582,18 @@ async def mode4_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m4_select_grade_or_custom)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💻 9-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_9")],
-        [InlineKeyboardButton(text="💻 10-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_10")],
-        [InlineKeyboardButton(text="💻 11-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_11")],
+        [
+            InlineKeyboardButton(text="🇺🇿 9-sinf (O‘zbek)", callback_data="chsb_pick_9"),
+            InlineKeyboardButton(text="🇷🇺 9-класс (Русский)", callback_data="chsb_pick_9_ru")
+        ],
+        [
+            InlineKeyboardButton(text="🇺🇿 10-sinf (O‘zbek)", callback_data="chsb_pick_10"),
+            InlineKeyboardButton(text="🇷🇺 10-класс (Русский)", callback_data="chsb_pick_10_ru")
+        ],
+        [
+            InlineKeyboardButton(text="🇺🇿 11-sinf (O‘zbek)", callback_data="chsb_pick_11"),
+            InlineKeyboardButton(text="🇷🇺 11-класс (Русский)", callback_data="chsb_pick_11_ru")
+        ],
         [InlineKeyboardButton(text="🔄 Boshqa sinf / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
     ])
     msg_text = (
@@ -1596,10 +1605,13 @@ async def mode4_start(message: types.Message, state: FSMContext):
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data.in_(["chsb_pick_9", "chsb_pick_10", "chsb_pick_11"]))
+@dp.callback_query(F.data.in_(["chsb_pick_9", "chsb_pick_10", "chsb_pick_11", "chsb_pick_9_ru", "chsb_pick_10_ru", "chsb_pick_11_ru"]))
 async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
-    grade_code = callback.data.replace("chsb_pick_", "")
-    chsb_info = get_chsb_for_grade(grade_code)
+    data_str = callback.data.replace("chsb_pick_", "")
+    is_ru = "_ru" in data_str
+    grade_code = data_str.replace("_ru", "")
+    lang = "ru" if is_ru else "uz"
+    chsb_info = get_chsb_for_grade(grade_code, lang=lang)
     if not chsb_info:
         await callback.answer("Ma'lumot topilmadi.")
         return
@@ -1612,6 +1624,7 @@ async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
     )
     await state.update_data(
         grade=grade_code,
+        lang=lang,
         criteria_text=crit_summary,
         criteria_path="",
         keys_text=chsb_info["keys"],
@@ -2025,6 +2038,14 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
         else:
             cname = detected_class or (f"{chosen_grade}-sinf" if chosen_grade else "9-sinf")
 
+        lang = data.get("lang", "uz")
+        if "school_info" not in parsed:
+            parsed["school_info"] = {}
+        parsed["school_info"]["lang"] = lang
+        if lang == "ru":
+            parsed["school_info"]["subject"] = "Информатика"
+            parsed["school_info"]["teacher_name"] = "Кабилов Обиджон"
+            parsed["school_info"]["head_teacher"] = "Махмудова Дильфузахон"
         out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_hisoboti.xlsx"
         build_chsb_excel(parsed, out_excel)
 
@@ -2394,9 +2415,18 @@ async def mode6_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m6_select_grade_or_custom)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💻 9-sinf Informatika (Original test & mezon)", callback_data="chsb_adj_pick_9")],
-        [InlineKeyboardButton(text="💻 10-sinf Informatika (Original test & mezon)", callback_data="chsb_adj_pick_10")],
-        [InlineKeyboardButton(text="💻 11-sinf Informatika (Original test & mezon)", callback_data="chsb_adj_pick_11")],
+        [
+            InlineKeyboardButton(text="🇺🇿 9-sinf (O‘zbek)", callback_data="chsb_adj_pick_9"),
+            InlineKeyboardButton(text="🇷🇺 9-класс (Русский)", callback_data="chsb_adj_pick_9_ru")
+        ],
+        [
+            InlineKeyboardButton(text="🇺🇿 10-sinf (O‘zbek)", callback_data="chsb_adj_pick_10"),
+            InlineKeyboardButton(text="🇷🇺 10-класс (Русский)", callback_data="chsb_adj_pick_10_ru")
+        ],
+        [
+            InlineKeyboardButton(text="🇺🇿 11-sinf (O‘zbek)", callback_data="chsb_adj_pick_11"),
+            InlineKeyboardButton(text="🇷🇺 11-класс (Русский)", callback_data="chsb_adj_pick_11_ru")
+        ],
         [InlineKeyboardButton(text="🔄 Boshqa sinf / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")]
     ])
     msg_text = (
@@ -2410,10 +2440,13 @@ async def mode6_start(message: types.Message, state: FSMContext):
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data.in_(["chsb_adj_pick_9", "chsb_adj_pick_10", "chsb_adj_pick_11"]))
+@dp.callback_query(F.data.in_(["chsb_adj_pick_9", "chsb_adj_pick_10", "chsb_adj_pick_11", "chsb_adj_pick_9_ru", "chsb_adj_pick_10_ru", "chsb_adj_pick_11_ru"]))
 async def cb_chsb_adj_pick(callback: CallbackQuery, state: FSMContext):
-    grade_code = callback.data.replace("chsb_adj_pick_", "")
-    chsb_info = get_chsb_for_grade(grade_code)
+    data_str = callback.data.replace("chsb_adj_pick_", "")
+    is_ru = "_ru" in data_str
+    grade_code = data_str.replace("_ru", "")
+    lang = "ru" if is_ru else "uz"
+    chsb_info = get_chsb_for_grade(grade_code, lang=lang)
     if not chsb_info:
         await callback.answer("Ma'lumot topilmadi.")
         return
@@ -2428,6 +2461,7 @@ async def cb_chsb_adj_pick(callback: CallbackQuery, state: FSMContext):
     )
     await state.update_data(
         grade=grade_code,
+        lang=lang,
         criteria_text=crit_summary,
         criteria_path="",
         keys_text=chsb_info["keys"],
@@ -2571,7 +2605,9 @@ async def mode6_journal_doc(message: types.Message, state: FSMContext):
             detected_cname = cname_match.group(1).upper().replace("_", "-") 
 
         # 3. Generate instant report from averages
-        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname)
+        data = await state.get_data()
+        lang = data.get("lang", "uz")
+        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname, lang=lang)
 
         out_excel = f"temp/{message.from_user.id}_{detected_cname}_chsb_bahoga_moslangan.xlsx"
         build_chsb_excel(report_data, out_excel)
@@ -2611,7 +2647,9 @@ async def mode6_journal_photo(message: types.Message, state: FSMContext):
             await status_msg.edit_text("❌ Jurnal fotosuratidan baholarni aniqlab bo‘lmadi. eMaktabdan Excel formatida yuklash tavsiya etiladi.")
             return
 
-        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname)
+        data = await state.get_data()
+        lang = data.get("lang", "uz")
+        report_data = ai_service.generate_chsb_report_from_averages(averages, class_name=detected_cname, lang=lang)
         cname = detected_cname
 
         out_excel = f"temp/{message.from_user.id}_{cname}_chsb_bahoga_moslangan.xlsx"
