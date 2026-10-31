@@ -474,6 +474,16 @@ Javob FAQAT sof JSON bo'lsin.
                 criteria_list = res["criteria"]
 
             new_students = res.get("students", [])
+            for s_idx, st in enumerate(new_students):
+                st["tr"] = len(all_students) + s_idx + 1
+                ts = st.get("task_scores")
+                if ts and isinstance(ts, list) and any(x is not None for x in ts):
+                    try:
+                        computed_sum = sum(float(x) for x in ts if x is not None)
+                        tot = round(computed_sum, 1)
+                        st["total_score"] = int(tot) if tot.is_integer() else tot
+                    except Exception:
+                        pass
             all_students.extend(new_students)
             if batch_callback and new_students:
                 try:
