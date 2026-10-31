@@ -775,13 +775,13 @@ Javob FAQAT sof JSON bo'lsin.
             raise
 
     def _send_prompt_to_gemini(self, prompt: str, img_paths: List[str]) -> Dict[str, Any]:
-        retries = 3
+        retries = 5  # 5 tagacha xavfsiz urinish
         last_error = None
 
         for attempt in range(retries):
             key = self._get_next_key()
             genai.configure(api_key=key, transport="rest")
-            model = genai.GenerativeModel("gemini-3.5-flash")
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
             loaded_imgs = [self._optimize_image(p) for p in img_paths if p and os.path.exists(p)]
             loaded_imgs = [im for im in loaded_imgs if im is not None]
@@ -792,10 +792,16 @@ Javob FAQAT sof JSON bo'lsin.
                 txt = response.text.strip()
                 return self._extract_json(txt)
             except Exception as e:
-                logger.warning(f"Attempt {attempt+1} failed with key ...{key[-4:]}: {e}")
+                err_str = str(e)
+                logger.warning(f"Attempt {attempt+1}/{retries} failed with key ...{key[-4:]}: {e}")
                 last_error = e
                 import time
-                time.sleep(2.0)
+                # Agar 429 bo'lsa darhol keyingi kalitga o'tish uchun kutish
+                if any(w in err_str.lower() for w in ["429", "quota", "exhausted", "rate"]):
+                    logger.info("429 Rate limit aniqlandi, keyingi kalitga avtomatik o'tilmoqda...")
+                    time.sleep(3.5)
+                else:
+                    time.sleep(2.0)
 
         raise RuntimeError(f"Gemini so'rovi bajarilmadi: {last_error}")
 

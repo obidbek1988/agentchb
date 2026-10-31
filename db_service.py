@@ -417,9 +417,31 @@ def get_session_files(user_id: int, mode: str) -> List[str]:
 def clear_session_files(user_id: int, mode: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    cursor.execute("SELECT file_path FROM user_session_files WHERE user_id = ? AND mode = ?", (user_id, mode))
+    rows = cursor.fetchall()
+    for (fpath,) in rows:
+        try:
+            if fpath and os.path.exists(fpath):
+                os.remove(fpath)
+        except Exception:
+            pass
     cursor.execute("DELETE FROM user_session_files WHERE user_id = ? AND mode = ?", (user_id, mode))
     conn.commit()
     conn.close()
+
+def cleanup_old_temp_files(max_age_seconds: int = 7200):
+    """2 soatdan oshgan barcha eski vaqtinchalik rasmlar va keshni o'chirib diskni tozalaydi"""
+    import time
+    now = time.time()
+    temp_dir = "temp"
+    if os.path.exists(temp_dir):
+        for fname in os.listdir(temp_dir):
+            fpath = os.path.join(temp_dir, fname)
+            try:
+                if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > max_age_seconds):
+                    os.remove(fpath)
+            except Exception:
+                pass
 
 init_db()
 restore_from_github()
