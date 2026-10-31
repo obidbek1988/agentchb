@@ -743,10 +743,13 @@ async def cb_m1_universal_criteria(callback: CallbackQuery, state: FSMContext):
     ]
     tot_pts = sum(c["max_point"] for c in default_crit)
     crit_info = {"grade": "Universal", "max_score": tot_pts, "criteria": default_crit}
-    lines = [f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**"]
-    for c in default_crit:
-        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
-    preview = "\n".join(lines)
+    code_lines = [f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}" for c in default_crit]
+    code_block = "\n".join(code_lines)
+    preview = (
+        f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**\n\n"
+        f"*(Nusxalash uchun matn ustiga bosing)* 👇\n"
+        f"```\n{code_block}\n```"
+    )
 
     await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
     await state.set_state(BotStates.m1_journal_fixed)
@@ -780,10 +783,13 @@ async def cb_m2_universal_criteria(callback: CallbackQuery, state: FSMContext):
     ]
     tot_pts = sum(c["max_point"] for c in default_crit)
     crit_info = {"grade": "Universal", "max_score": tot_pts, "criteria": default_crit}
-    lines = [f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**"]
-    for c in default_crit:
-        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
-    preview = "\n".join(lines)
+    code_lines = [f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}" for c in default_crit]
+    code_block = "\n".join(code_lines)
+    preview = (
+        f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**\n\n"
+        f"*(Nusxalash uchun matn ustiga bosing)* 👇\n"
+        f"```\n{code_block}\n```"
+    )
 
     await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
     await state.set_state(BotStates.m2_criteria)
@@ -805,10 +811,13 @@ async def cb_m5_universal_criteria(callback: CallbackQuery, state: FSMContext):
     ]
     tot_pts = sum(c["max_point"] for c in default_crit)
     crit_info = {"grade": "Universal", "max_score": tot_pts, "criteria": default_crit}
-    lines = [f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**"]
-    for c in default_crit:
-        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
-    preview = "\n".join(lines)
+    code_lines = [f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}" for c in default_crit]
+    code_block = "\n".join(code_lines)
+    preview = (
+        f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**\n\n"
+        f"*(Nusxalash uchun matn ustiga bosing)* 👇\n"
+        f"```\n{code_block}\n```"
+    )
 
     await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
     await state.set_state(BotStates.m5_criteria)
@@ -1251,8 +1260,12 @@ def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[
     """
     Parses user-edited BSB criteria.
     Supports:
-    1. Numbers only: '10, 10, 10, 20' or '15 15 10 10'
-    2. Detailed lines: '1-topshiriq [10 ball]: Matn...' or '1. Nazariya 10'
+    1. Numbers only: '10, 10, 10, 20' or '5, 5, 5, 5, 5' or '15 15 10 10'
+    2. Copied code block: '1-topshiriq [5 ball]: Matn...'
+    3. Multi-line blocks:
+       1-topshiriq 5 ball:
+       Sprayt kostyumlari... — Jami: 5 ball
+    4. Simple numbered lists: '1. Matn 10 ball', '1) Matn (5 ball)'
     """
     text = (text or "").strip()
     from criteria_store import get_criteria_for_grade
@@ -1262,9 +1275,9 @@ def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[
     if not text:
         return def_criteria
 
-    # 1. Check if user just entered numbers (e.g. '10, 10, 10, 20' or '15 15 10 10')
-    num_matches = re.findall(r'\b\d+\b', text)
+    # 1. Check if user just entered numbers (e.g. '5, 5, 5, 5, 5' or '10, 10, 10, 20')
     cleaned_check = re.sub(r'[\d\s,\-\+/;:]', '', text).strip()
+    num_matches = re.findall(r'\b\d+\b', text)
     if not cleaned_check and num_matches and len(num_matches) >= 2:
         criteria = []
         for idx, n_str in enumerate(num_matches, start=1):
@@ -1275,7 +1288,10 @@ def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[
                 if orig_skill:
                     orig_skill = re.sub(r'\[\d+\s*(?:ball|b)?\]|\(\d+\s*(?:ball|b)?\)', '', orig_skill).strip()
                     orig_skill = re.sub(r'\n*\s*Jami:\s*\d+\s*ball', '', orig_skill, flags=re.IGNORECASE).strip()
-                    skill = orig_skill
+                    orig_skill = re.sub(r'^[•\-\d\.\)\s]+', '', orig_skill).strip()
+                    orig_skill = re.sub(r'^[0-9]+-topshiriq\s*[:\-\s]*', '', orig_skill, flags=re.IGNORECASE).strip()
+                    if orig_skill:
+                        skill = orig_skill
             criteria.append({
                 "task_number": idx,
                 "skill_text": skill,
@@ -1283,36 +1299,52 @@ def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[
             })
         return criteria
 
-    # 2. Line by line parsing
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    criteria = []
-    for idx, line in enumerate(lines, start=1):
-        m_pts = re.search(r'\[(\d+)\s*(?:ball|b)?\]|\((\d+)\s*(?:ball|b)?\)|(\d+)\s*(?:ball|b)\b', line, re.IGNORECASE)
-        pts = 10
-        if m_pts:
-            pts = int(m_pts.group(1) or m_pts.group(2) or m_pts.group(3))
-        else:
-            m_end = re.search(r'(\d+)\s*$', line)
-            if m_end:
-                pts = int(m_end.group(1))
+    # 2. Advanced chunking by task markers
+    pattern = r'(?=(?:^|\n)\s*(?:(?:\d+[\-\.]\s*topshiriq|\btopshiriq\s*\d+|\b\d+\s*[\.\)]|\b\d+\s*-\s*savol|\bsavol\s*\d+)))'
+    chunks = [c.strip() for c in re.split(pattern, text, flags=re.IGNORECASE) if c.strip()]
 
-        clean_text = line
-        clean_text = re.sub(r'\[\d+\s*(?:ball|b)?\]|\(\d+\s*(?:ball|b)?\)', '', clean_text).strip()
-        clean_text = re.sub(r'^[•\-\d\.\)\s]+', '', clean_text).strip()
-        if not clean_text:
-            clean_text = f"{idx}-topshiriq"
+    if len(chunks) <= 1:
+        chunks = [l.strip() for l in text.splitlines() if l.strip()]
+
+    criteria = []
+    for idx, chunk in enumerate(chunks, start=1):
+        pts = None
+        m_pts = re.search(r'(?:jami\s*:\s*)?(\d+)\s*(?:ball|bal|b\b)', chunk, re.IGNORECASE)
+        if m_pts:
+            pts = int(m_pts.group(1))
         else:
-            clean_text = f"{idx}-topshiriq: {clean_text}"
+            m_brack = re.search(r'\[(\d+)\]|\((\d+)\)', chunk)
+            if m_brack:
+                pts = int(m_brack.group(1) or m_brack.group(2))
+            else:
+                m_end = re.search(r'\b(\d+)\s*$', chunk)
+                if m_end:
+                    pts = int(m_end.group(1))
+
+        if pts is None:
+            pts = 5
+
+        clean = chunk
+        clean = re.sub(r'\[\s*\d+\s*(?:ball|b)?\s*\]|\(\s*\d+\s*(?:ball|b)?\s*\)', '', clean, flags=re.IGNORECASE)
+        clean = re.sub(r'[—\-–]?\s*Jami\s*:\s*\d+\s*(?:ball|b)?', '', clean, flags=re.IGNORECASE)
+        clean = re.sub(r'^(?:(?:\d+[\-\.]\s*topshiriq|\btopshiriq\s*\d+|\b\d+\s*[\.\)]|\b\d+\s*-\s*savol|\bsavol\s*\d+)\s*(?:\d+\s*(?:ball|b)?)?[:\-\s]*)', '', clean, flags=re.IGNORECASE)
+        clean = re.sub(r'^\s*\d+\s*(?:ball|b)\s*[:\-\s]*', '', clean, flags=re.IGNORECASE)
+        clean = re.sub(r'[:\-\s]*\d+\s*(?:ball|b)\s*$', '', clean, flags=re.IGNORECASE)
+        clean = " ".join(clean.split()).strip()
+        clean = clean.lstrip(":-–—;. ")
+        if not clean:
+            clean = f"{idx}-topshiriq"
 
         criteria.append({
             "task_number": idx,
-            "skill_text": clean_text,
+            "skill_text": clean,
             "max_point": pts
         })
 
     if not criteria:
         return def_criteria
     return criteria
+
 
 @dp.message(F.text.contains("3️⃣ BSB (Ishlarni tekshirish)"))
 @dp.message(F.text.contains("2️⃣ BSB (Ishlarni tekshirish)"))
@@ -1563,10 +1595,13 @@ async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
     tot_points = sum(c.get("max_point", 10) for c in parsed_criteria)
 
     grade_title = "UNIVERSAL" if grade == "Universal" else f"{grade}-sinf"
-    lines = [f"📋 **Yangilangan {grade_title} BSB mezoni (Jami: {tot_points} ball):**"]
-    for c in parsed_criteria:
-        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
-    custom_preview = "\n".join(lines)
+    code_lines = [f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}" for c in parsed_crit]
+    code_block = "\n".join(code_lines)
+    custom_preview = (
+        f"📋 **Yangilangan {grade_title} BSB mezoni (Jami: {tot_pts} ball):**\n\n"
+        f"*(Nusxalash uchun matn ustiga bosing)* 👇\n"
+        f"```\n{code_block}\n```"
+    )
 
     crit_info = {
         "title": f"{grade}-sinf Informatika 1-BSB",
@@ -2973,10 +3008,13 @@ async def mode5_criteria_custom_text(message: types.Message, state: FSMContext):
     tot_pts = sum(c.get("max_point", 10) for c in parsed_crit)
 
     grade_title = "UNIVERSAL" if grade == "Universal" else f"{grade}-sinf"
-    lines = [f"📋 **Yangilangan {grade_title} BSB mezoni (Jami: {tot_pts} ball):**"]
-    for c in parsed_crit:
-        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
-    custom_preview = "\n".join(lines)
+    code_lines = [f"{c['task_number']}-topshiriq [{c['max_point']} ball]: {c['skill_text']}" for c in parsed_crit]
+    code_block = "\n".join(code_lines)
+    custom_preview = (
+        f"📋 **Yangilangan {grade_title} BSB mezoni (Jami: {tot_pts} ball):**\n\n"
+        f"*(Nusxalash uchun matn ustiga bosing)* 👇\n"
+        f"```\n{code_block}\n```"
+    )
 
     crit_info = {
         "grade": grade,

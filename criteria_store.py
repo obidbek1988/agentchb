@@ -254,15 +254,27 @@ def get_criteria_for_grade(grade: str) -> Optional[Dict[str, Any]]:
     return INFORMATIKA_1_CHORAK_BSB.get(digits)
 
 def format_criteria_preview(grade: str) -> str:
+    import re
     info = get_criteria_for_grade(grade)
     if not info:
         return "Ushbu sinf uchun mezon topilmadi."
     
-    text = f"📋 **{info['title']} rasmiy baholash mezonlari ({info['max_score']} ball):**\n\n"
+    sample_lines = []
     for idx, c in enumerate(info['criteria'], start=1):
         clean_text = c['skill_text'].replace('\n\nJami:', ' — Jami:').replace('\n', ' ')
-        text += f"**{idx}-topshiriq [{c['max_point']} ball]:**\n_{clean_text}_\n\n"
+        clean_text = re.sub(r'\[\d+\s*(?:ball|b)?\]|\(\d+\s*(?:ball|b)?\)', '', clean_text).strip()
+        clean_text = re.sub(r'^[•\-\d\.\)\s]+', '', clean_text).strip()
+        clean_text = re.sub(r'^[0-9]+-topshiriq\s*[:\-\s]*', '', clean_text, flags=re.IGNORECASE).strip()
+        sample_lines.append(f"{idx}-topshiriq [{c['max_point']} ball]: {clean_text}")
+    code_block = "\n".join(sample_lines)
+
+    text = (
+        f"📋 **{info['title']} rasmiy baholash mezoni ({info['max_score']} ball):**\n\n"
+        f"*(Nusxalash uchun matn ustiga bosing)* 👇\n"
+        f"```\n{code_block}\n```"
+    )
     return text.strip()
+
 
 # ==================== CHSB MEZONLARI (INFORMATIKA) ====================
 
