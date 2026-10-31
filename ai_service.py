@@ -693,19 +693,17 @@ Siz tajribali o'qituvchisiz.
 {adj_desc}
 Keyingi rasmlar: O'quvchilarning daftardagi yoki qog'ozdagi yozma ishlari.
 
-YOZMA ISHLARNI TEKSHIRISH VA BIRLASHTIRISH QOIDALARI:
-1. KO'P VARAQLI ISHLARNI BIRLASHTIRISH (1-8 VARAQ):
+YOZMA ISHLARNI TEKSHIRISH VA BAHOLASHNING QAT'IY QOIDALARI:
+1. QAT'IY VA HAQQONIY BAHOLASH (ASOSSIZ TEKIN BALL BERILMASIN):
+   - AGAR TOPSHIRIQ JAVOBI MUTLAQO NOTO'G'RI BO'LSA (mavzudan tashqari, noto'g'ri bloklar, noto'g'ri komandalar yoki safsata yozilgan bo'lsa), UNGA QAT'IY 0 (NOL) BALL QO'YILSIN! O'quvchi matn yozib harakat qilgani uchungina asossiz 2-3 ball berilmasin! Mutlaqo xato javob = 0 ball!
+   - AGAR TOPSHIRIQ QISMAN TO'G'RI BO'LSA (masalan yarmigacha to'g'ri yozilgan, lekin oxirida xatolik bo'lsa), faqat shundagina mos ravishda yarim ball berilsin.
+   - AGAR TOPSHIRIQ TO'LIQ TO'G'RI BO'LSA: maksimal ball berilsin.
+2. TAHLIL VA IZOH (NOTE):
+   - Izohda qaysi topshiriqlar to'liq to'g'ri, qaysi topshiriq xato qilingani aniq sababi bilan yozilsin (masalan: "1, 2, 3 va 5-topshiriqlar to'liq; 4-topshiriq mutlaqo xato (-5b)").
+3. KO'P VARAQLI ISHLARNI BIRLASHTIRISH (1-8 VARAQ):
    O'quvchi yozma ishni 1 ta, 2 ta, 4 ta yoki 8 tagacha varaqda yozgan bo'lishi mumkin.
    O'quvchi F.I.O faqat 1-sahifada bo'ladi. Keyingi sahifalarda yangi ism bo'lmasa, ularni yangi o'quvchi deb ochmang — oldingi o'quvchining davomi deb bitta o'quvchiga jamlang!
-2. HAQIQATGA MOSLIK:
-   O'rtacha bahoga moslashda 50 dan 50 (100%) ball chiqarmang, 44-48 ball oralig'iga moslansin.
-
-Har bir o'quvchining ishini mezonga va to'g'ri javoblar kalitiga qarab tekshiring:
-- O'quvchining ism-familiyasini aniqlang;
-- Har bir topshiriq uchun to'g'riligiga qarab ball bering;
-- Jami to'plagan ballini hisoblang;
-- Har bir o'quvchi uchun QISQA TAHLIL (note) yozing: qaysi topshiriq to'g'ri, qaysi birida xato qilgani (masalan: "1-3 topshiriq to'liq, 4-topshiriqda xatolik (-2b)");
-- Tartib raqamini (tr) {start_tr} dan boshlab bering.
+4. Tartib raqamini (tr) {start_tr} dan boshlab bering.
 
 Quyidagi JSON formatida qaytaring:
 {{
