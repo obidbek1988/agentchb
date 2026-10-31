@@ -191,9 +191,9 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     head_teacher = school_info.get("head_teacher", "Mahmudova Dilfuzaxon")
 
     title_text = (
-        "BSB tahlil Bayonnomasi\n"
+        "CHSB test tahlil Bayonnomasi\n"
         f"FARG‘ONA viloyati FARG‘ONA SHAHRI 26-umumta’lim maktabi\n"
-        f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {chsb_number}-CHSB ({max_score}ball)natijalari"
+        f"{class_name} sinf o‘quvchilarining {quarter}-chorak {subject.lower()} fanidan {chsb_number}-CHSB ({max_score} ball) test natijalari"
     )
 
     ws.merge_cells("A1:H1")

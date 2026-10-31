@@ -68,6 +68,9 @@ def get_main_keyboard(user_id: int = 0, is_admin: bool = False):
             ],
             [
                 KeyboardButton(text="💳 Balans to‘ldirish (Admin)"),
+                KeyboardButton(text="👑 VIP Boshqaruvi (Admin)")
+            ],
+            [
                 KeyboardButton(text="📊 Baza va Statistika (Admin)")
             ],
             [
@@ -95,14 +98,10 @@ def get_main_keyboard(user_id: int = 0, is_admin: bool = False):
             ]
         ]
     else:
-        # Oddiy mijoz (Faqat CHSB ko'rinadi)
+        # Oddiy mijoz (Faqat CHSB testlarini tekshirish)
         kb = [
             [
-                KeyboardButton(text="3️⃣ CHSB (Ballar orqali)"),
-                KeyboardButton(text="4️⃣ CHSB (Testlarni tekshirish)")
-            ],
-            [
-                KeyboardButton(text="6️⃣ CHSB (Bahoga moslash)")
+                KeyboardButton(text="🎯 CHSB (Testlarni tekshirish)")
             ],
             [
                 KeyboardButton(text="💰 Hisobim / To‘lov qilish"),
@@ -142,6 +141,7 @@ class BotStates(StatesGroup):
     # Admin balans to'ldirish
     admin_topup_select_user = State()
     admin_topup_enter_amount = State()
+    admin_vip_add = State()
 
 # ==================== TO'LOV VA BALANS TIZIMI ====================
 @dp.message(F.text.contains("Hisobim / To‘lov qilish"))
@@ -680,11 +680,9 @@ async def start_cmd(message: types.Message, state: FSMContext):
         )
     else:
         welcome_text = (
-            "Assalomu alaykum! 🎓 **CHSB Hisobot Agentiga** xush kelibsiz.\n\n"
-            "Quyidagi imkoniyatlardan birini tanlang:\n\n"
-            "3️⃣ **CHSB (Ballar orqali):** eMaktab CHSB jurnali bo‘yicha (B-Q-M) hisobot qilish.\n"
-            "4️⃣ **CHSB (Testlarni tekshirish):** Test to‘g‘ri kaliti va o‘quvchi javoblari varaqasini tekshirish.\n"
-            "6️⃣ **CHSB (Bahoga moslash):** O‘quvchining darsdagi bahosiga qarab CHSB test ballini avtomatik moslashtirish."
+            "Assalomu alaykum! 🎓 **CHSB Test Tekshirish va Hisobot Botiga** xush kelibsiz.\n\n"
+            "Bu bot orqali siz test to‘g‘ri javoblar kaliti va o‘quvchilar javob varaqalarini sun’iy intellekt (AI) orqali tezkor tekshirib, tayyor **CHSB test hisobotini** olasiz.\n\n"
+            "Boshlash uchun pastdagi **'🎯 CHSB (Testlarni tekshirish)'** tugmasini bosing:"
         )
     await message.answer(welcome_text, reply_markup=get_main_keyboard(user_id=uid, is_admin=is_admin), parse_mode="Markdown")
 
@@ -1375,6 +1373,13 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
 @dp.message(F.text.contains("3️⃣ CHSB (Ballar orqali)"))
 @dp.message(F.text.contains("CHSB (Ballar orqali)"))
 async def mode3_start(message: types.Message, state: FSMContext):
+    uid = message.from_user.id
+    if uid != ADMIN_ID and not db_service.is_vip_user(uid):
+        await message.answer(
+            "ℹ️ Sizga **🎯 CHSB (Testlarni tekshirish)** xizmati biriktirilgan.\n\nBoshqa bo‘limlarni ochish uchun adminga murojaat qiling: @Obidbek1988",
+            reply_markup=get_main_keyboard(uid)
+        )
+        return
     can_proceed, credit_type = await check_access_and_notify(message)
     if not can_proceed:
         return
@@ -1551,8 +1556,8 @@ async def mode3_criteria(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 4-REJIM: CHSB TESTLARNI TEKSHIRISH ====================
-@dp.message(F.text.contains("4️⃣ CHSB (Testlarni tekshirish)"))
 @dp.message(F.text.contains("CHSB (Testlarni tekshirish)"))
+@dp.message(F.text.contains("Testlarni tekshirish"))
 async def mode4_start(message: types.Message, state: FSMContext):
     can_proceed, credit_type = await check_access_and_notify(message)
     if not can_proceed:
@@ -1822,11 +1827,11 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
             is_text_criteria=is_text_crit
         )
         cname = parsed.get("school_info", {}).get("class_name", "sinf")
-        out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_report.xlsx"
+        out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_hisoboti.xlsx"
         build_chsb_excel(parsed, out_excel)
 
-        doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_test_tekshirilgan.xlsx")
-        cap = f"🎉 **{cname} sinf testlari to‘liq tekshirildi va CHSB hisoboti tayyorlandi!**{FEEDBACK_NOTE}"
+        doc = FSInputFile(out_excel, filename=f"{cname}_sinf_CHSB_test_hisoboti.xlsx")
+        cap = f"🎉 **{cname} sinf CHSB testlari muvaffaqiyatli tekshirildi va test hisoboti tayyorlandi!**\n• Har bir o‘quvchining to‘g‘ri/noto‘g‘ri javoblari va yakuniy bali hisobotda aks etgan.{FEEDBACK_NOTE}"
         await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{actual_username}")
         await status_msg.delete()
@@ -2181,6 +2186,13 @@ async def mode5_finish(message: types.Message, state: FSMContext, user_id: int =
 @dp.message(F.text.contains("6️⃣ CHSB (Bahoga moslash)"))
 @dp.message(F.text.contains("CHSB (Bahoga moslash)"))
 async def mode6_start(message: types.Message, state: FSMContext):
+    uid = message.from_user.id
+    if uid != ADMIN_ID and not db_service.is_vip_user(uid):
+        await message.answer(
+            "ℹ️ Sizga **🎯 CHSB (Testlarni tekshirish)** xizmati biriktirilgan.\n\nBoshqa bo‘limlarni ochish uchun adminga murojaat qiling: @Obidbek1988",
+            reply_markup=get_main_keyboard(uid)
+        )
+        return
     can_proceed, credit_type = await check_access_and_notify(message)
     if not can_proceed:
         return
@@ -2735,6 +2747,204 @@ async def cmd_reload_baza(message: types.Message):
     user = db_service.get_or_create_user(ADMIN_ID)
     await message.answer(f"✅ Baza GitHub Cloud'dan yangilandi!\nSizning balansingiz: **{user.get('balance_classes', 0)} ta sinf**", parse_mode="Markdown")
 
+
+
+# ==================== ADMIN: VIP BOSHQARUVI (TUGMA VA INTERAKTIV MENYU) ====================
+
+async def build_vip_management_message():
+    vips = db_service.get_vip_users()
+    if not vips:
+        text = (
+            "👑 **VIP MIJOZLAR BOSHQARUVI (Admin)**\n\n"
+            "Hozircha maxsus VIP mijozlar ro‘yxati bo‘sh.\n\n"
+            "💡 _VIP qilingan foydalanuvchilarga barcha 6 ta BSB va CHSB imkoniyatlari to‘liq ochiladi._\n\n"
+            "Yangi VIP qo‘shish uchun pastdagi tugmani bosing:"
+        )
+        ikb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Yangi VIP mijoz qo‘shish", callback_data="vip_add_start")],
+            [InlineKeyboardButton(text="❌ Yopish", callback_data="vip_close")]
+        ])
+        return text, ikb
+
+    lines = [f"👑 **VIP MIJOZLAR BOSHQARUVI (Admin)**\n\nJami VIP mijozlar: **{len(vips)} nafar**\n"]
+    kb_rows = [
+        [InlineKeyboardButton(text="➕ Yangi VIP mijoz qo‘shish", callback_data="vip_add_start")]
+    ]
+    for idx, uid in enumerate(vips, 1):
+        u = db_service.get_or_create_user(uid)
+        uname = f"@{u['username']}" if u.get("username") else "usernamesiz"
+        fname = u.get("full_name") or "Ismsiz"
+        bal = u.get("balance_classes", 0)
+        lines.append(f"{idx}. 👤 **{fname}** ({uname})\n   🆔 `{uid}` | 💰 Balans: {bal} sinf")
+        kb_rows.append([
+            InlineKeyboardButton(text=f"❌ {fname[:14]} ({uid}) ni chiqarish", callback_data=f"vip_remove_{uid}")
+        ])
+
+    lines.append("\n💡 _Biror foydalanuvchini VIPdan chiqarish uchun uning yonidagi '❌ ... ni chiqarish' tugmasini bosing._")
+    kb_rows.append([
+        InlineKeyboardButton(text="🔄 Yangilash", callback_data="vip_refresh"),
+        InlineKeyboardButton(text="❌ Yopish", callback_data="vip_close")
+    ])
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=kb_rows)
+
+@dp.message(F.text.contains("VIP Boshqaruvi (Admin)"))
+@dp.message(Command("vipmenu"))
+async def admin_vip_menu_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    text, ikb = await build_vip_management_message()
+    await message.answer(text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data == "vip_refresh")
+async def cb_vip_refresh(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin uchun!", show_alert=True)
+        return
+    text, ikb = await build_vip_management_message()
+    try:
+        await callback.message.edit_text(text, reply_markup=ikb, parse_mode="Markdown")
+        await callback.answer("Ro‘yxat yangilandi.")
+    except Exception:
+        await callback.answer("O‘zgarish yo‘q.")
+
+@dp.callback_query(F.data == "vip_close")
+async def cb_vip_close(callback: CallbackQuery):
+    await callback.message.delete()
+    await callback.answer()
+
+@dp.callback_query(F.data == "vip_add_start")
+async def cb_vip_add_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin uchun!", show_alert=True)
+        return
+    await state.set_state(BotStates.admin_vip_add)
+    await callback.answer()
+    await callback.message.answer(
+        "👑 **YANGI VIP MIJOZ QO‘SHISH:**\n\n"
+        "Mijozning **Telegram ID** raqamini, **@username** ini yoki ism-familiyasini yozib yuboring:\n\n"
+        "*(Bekor qilish uchun: '❌ Bekor qilish')*",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
+            resize_keyboard=True
+        ),
+        parse_mode="Markdown"
+    )
+
+@dp.message(BotStates.admin_vip_add)
+async def admin_vip_add_input(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        return
+    query = (message.text or "").strip()
+    if query.lower() in ["/cancel", "cancel", "❌ bekor qilish", "bekor qilish"]:
+        await state.clear()
+        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
+        return
+
+    users = db_service.find_users(query, limit=5)
+    if not users and query.isdigit():
+        uid = int(query)
+        u = db_service.get_or_create_user(uid)
+        users = [u]
+
+    if not users:
+        await message.answer(
+            f"❌ Bazada **'{query}'** bo‘yicha foydalanuvchi topilmadi.\n"
+            f"Iltimos, Telegram ID raqamini aniqroq kiriting (masalan: `6580113791`):",
+            parse_mode="Markdown"
+        )
+        return
+
+    if len(users) == 1:
+        u = users[0]
+        uid = u["user_id"]
+        db_service.add_vip_user(uid)
+        await state.clear()
+        name = u.get("full_name") or u.get("username") or str(uid)
+        await message.answer(
+            f"✅ **{name}** (`{uid}`) muvaffaqiyatli VIP ro‘yxatiga qo‘shildi!\n"
+            f"Unga barcha 6 ta BSB va CHSB menyulari to‘liq ochildi.",
+            reply_markup=get_main_keyboard(message.from_user.id),
+            parse_mode="Markdown"
+        )
+        try:
+            await bot.send_message(
+                uid,
+                "🎉 **Tabriklaymiz! Sizga admin tomonidan to‘liq imkoniyatlar (VIP) ochildi!**\n\n"
+                "Endi siz BSB va CHSB bo‘yicha barcha 6 ta rejimdan bemalol foydalanishingiz mumkin:\n"
+                "1️⃣ BSB (Ballar orqali)\n"
+                "2️⃣ BSB (Ishlarni tekshirish)\n"
+                "3️⃣ CHSB (Ballar orqali)\n"
+                "4️⃣ CHSB (Testlarni tekshirish)\n"
+                "5️⃣ BSB (Bahoga moslash)\n"
+                "6️⃣ CHSB (Bahoga moslash)\n\n"
+                "Pastdagi menyu yangilandi! 👇",
+                reply_markup=get_main_keyboard(uid)
+            )
+        except Exception:
+            pass
+
+        text, ikb = await build_vip_management_message()
+        await message.answer(text, reply_markup=ikb, parse_mode="Markdown")
+    else:
+        ikb_rows = []
+        for u in users:
+            uid = u["user_id"]
+            uname = f"@{u['username']}" if u.get("username") else "ID"
+            name = u.get("full_name") or uname
+            ikb_rows.append([InlineKeyboardButton(text=f"👤 {name[:16]} ({uname})", callback_data=f"vip_pickadd_{uid}")])
+        ikb_rows.append([InlineKeyboardButton(text="❌ Bekor qilish", callback_data="vip_close")])
+        await message.answer(
+            f"🔍 Bir nechta foydalanuvchi topildi ({len(users)} ta). Birini tanlang:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=ikb_rows)
+        )
+
+@dp.callback_query(F.data.startswith("vip_pickadd_"))
+async def cb_vip_pickadd(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin uchun!", show_alert=True)
+        return
+    uid = int(callback.data.split("_")[2])
+    db_service.add_vip_user(uid)
+    await state.clear()
+    u = db_service.get_or_create_user(uid)
+    name = u.get("full_name") or u.get("username") or str(uid)
+
+    await callback.answer("✅ VIP qo‘shildi!", show_alert=True)
+    try:
+        await bot.send_message(
+            uid,
+            "🎉 **Tabriklaymiz! Sizga botda to‘liq imkoniyatlar (VIP) ochildi!**\n\nMenyuingiz yangilandi! 👇",
+            reply_markup=get_main_keyboard(uid)
+        )
+    except Exception:
+        pass
+
+    text, ikb = await build_vip_management_message()
+    await callback.message.edit_text(text, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("vip_remove_"))
+async def cb_vip_remove(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("Faqat admin uchun!", show_alert=True)
+        return
+    uid = int(callback.data.split("_")[2])
+    db_service.remove_vip_user(uid)
+    await callback.answer("❌ Foydalanuvchi VIP ro‘yxatidan chiqarildi!", show_alert=True)
+
+    try:
+        await bot.send_message(
+            uid,
+            "ℹ️ **Hisobingiz odatiy mijoz rejimiga o‘tkazildi.**\nSizga CHSB test hisobotlari xizmati mavjud.",
+            reply_markup=get_main_keyboard(uid)
+        )
+    except Exception:
+        pass
+
+    text, ikb = await build_vip_management_message()
+    try:
+        await callback.message.edit_text(text, reply_markup=ikb, parse_mode="Markdown")
+    except Exception:
+        pass
 
 # ==================== ADMIN: VIP BOSHQARUVI ====================
 
