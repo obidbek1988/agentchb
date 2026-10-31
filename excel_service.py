@@ -62,11 +62,11 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     ws.title = "Лист1"
     ws.views.sheetView[0].showGridLines = True
 
-    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 1
+    ws.page_setup.fitToHeight = 0
 
     ws.page_margins.left = 0.25
     ws.page_margins.right = 0.25
@@ -182,26 +182,32 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
         c_j.border = thin_border
         c_j.font = font_data
 
-        ws.row_dimensions[curr_row].height = 19
+        note_str = str(note)
+        if len(note_str) > 55:
+            ws.row_dimensions[curr_row].height = 30
+        elif len(note_str) > 28:
+            ws.row_dimensions[curr_row].height = 25
+        else:
+            ws.row_dimensions[curr_row].height = 20
 
     end_row = start_row + len(students) - 1
     sig_row = end_row + 2
     ws.cell(row=sig_row, column=1, value=f"Fan o‘qituvchisi:____________________  {teacher_name}").font = font_bold
     ws.cell(row=sig_row+1, column=1, value=f"Metod birlashma rahbari:_______________ {head_teacher}").font = font_bold
 
-    # Printerdan chiqarganda FOIZ ustunigacha (A dan I gacha) chiqsin
-    ws.print_area = f"A1:I{sig_row+1}"
+    # Printerdan chiqarganda to'liq jadval A dan J gacha chiroyli chiqsin
+    ws.print_area = f"A1:J{sig_row+1}"
 
     ws.column_dimensions["A"].width = 4.5
     ws.column_dimensions["B"].width = 25
-    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["C"].width = 13
     ws.column_dimensions["D"].width = 13
-    ws.column_dimensions["E"].width = 14
-    ws.column_dimensions["F"].width = 14
+    ws.column_dimensions["E"].width = 13
+    ws.column_dimensions["F"].width = 13
     ws.column_dimensions["G"].width = 13
     ws.column_dimensions["H"].width = 9.5
     ws.column_dimensions["I"].width = 8
-    ws.column_dimensions["J"].width = 26
+    ws.column_dimensions["J"].width = 46
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
