@@ -382,7 +382,7 @@ Javob FAQAT sof JSON bo'lsin.
         _, averages = await self.parse_journal_data(journal_path)
         return averages
 
-    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf", subject: str = "Informatika", lang: str = "uz") -> Dict[str, Any]:
+    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf", subject: str = "Informatika", lang: str = "uz", custom_keys: str = "", custom_criteria: str = "") -> Dict[str, Any]:
         """
         Darsdagi baholarga qarab 40 ballik CHSB hisobotini o'quvchi ishisiz generatsiya qiladi.
         O'zbek va Rus sinflari uchun to'liq moslangan.
@@ -404,6 +404,16 @@ Javob FAQAT sof JSON bo'lsin.
             6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B',
             11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'
         })
+        if custom_keys and isinstance(custom_keys, str):
+            p_keys = parse_keys_string(custom_keys)
+            if p_keys:
+                official_keys.update(p_keys)
+        if custom_criteria and isinstance(custom_criteria, str):
+            cb_q, cq_q, cm_q = parse_bqm_string(custom_criteria)
+            if cb_q or cq_q or cm_q:
+                b_q = cb_q or b_q
+                q_q = cq_q or q_q
+                m_q = cm_q or m_q
 
         students = []
         for idx, (name, avg_grade) in enumerate(journal_averages.items(), start=1):
@@ -461,11 +471,18 @@ Javob FAQAT sof JSON bo'lsin.
                     note = f"Оценка за урок: {avg_grade} (оценка {baho_num}). Все 15 тестов решены верно (100%)."
                 final_name = name
             else:
-                if wrong:
-                    wrong_str = ', '.join(f'{w}' for w in wrong)
-                    note = f"Dars bahosi: {avg_grade} ({baho_num} baho). {correct_count} ta to‘g‘ri, {len(wrong)} ta xato ({wrong_str}-testlar)."
+                if bool(custom_keys):
+                    if wrong:
+                        wrong_parts = [f"{w}-{official_keys.get(w, 'A')} xato" for w in wrong]
+                        note = f"Dars bahosi: {avg_grade} ({baho_num} baho). {correct_count} ta to‘g‘ri, {len(wrong)} ta xato ({', '.join(wrong_parts)})."
+                    else:
+                        note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
                 else:
-                    note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
+                    if wrong:
+                        wrong_str = ', '.join(f'{w}' for w in wrong)
+                        note = f"Dars bahosi: {avg_grade} ({baho_num} baho). {correct_count} ta to‘g‘ri, {len(wrong)} ta xato ({wrong_str}-testlar)."
+                    else:
+                        note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
                 final_name = to_uzbek_latin(name)
                 note = to_uzbek_latin(note)
 

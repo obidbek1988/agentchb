@@ -370,6 +370,9 @@ def get_action_keyboard(show_finish: bool = False, show_back: bool = True):
 def get_grade_selection_keyboard():
     inline_kb = [
         [
+            InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m1_universal_criteria")
+        ],
+        [
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="grade_7"),
             InlineKeyboardButton(text="⚡ 8-sinf (25b)", callback_data="grade_8"),
@@ -382,7 +385,6 @@ def get_grade_selection_keyboard():
         [
             InlineKeyboardButton(text="👁 Mezonlarni ko‘rish", callback_data="view_criteria_menu")
         ],
-
         [
             InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")
         ]
@@ -689,7 +691,7 @@ async def start_cmd(message: types.Message, state: FSMContext):
             "Quyidagi imkoniyatlardan birini tanlang:\n\n"
             "⬅️ **BSB bo‘limi (Chap tomonda):**\n"
             "1️⃣ **BSB (Ballar orqali):** eMaktab jurnali va mezon rasmidan hisobot qilish.\n"
-            "3️⃣ **BSB (Ishlarni tekshirish):** O‘quvchilar yozma ishlarini AI orqali tekshirish.\n"
+            "3️⃣ **BSB (Ishlarni tekshirish):** O‘quvchilar yozma ishlarini AI Agent orqali tekshirish.\n"
             "5️⃣ **BSB (Bahoga moslash):** Darsdagi o‘rtacha bahosiga moslab BSB ball qo‘yish.\n\n"
             "➡️ **CHSB bo‘limi (O‘ng tomonda):**\n"
             "2️⃣ **CHSB (Ballar orqali):** eMaktab CHSB jurnali bo‘yicha hisobot qilish.\n"
@@ -722,6 +724,112 @@ async def send_to_archive(doc_path: str, caption: str):
         await bot.send_document(ADMIN_ID, doc_adm, caption=f"📁 **Arxiv nusxasi (Admin):**\n{caption}")
     except Exception as e2:
         logger.warning(f"Adminga arxiv nusxa jo'natilmadi: {e2}")
+
+
+# ==================== UNIVERSAL BSB & CHSB HANDLERS ====================
+
+@dp.callback_query(F.data == "m1_universal_criteria")
+async def cb_m1_universal_criteria(callback: CallbackQuery, state: FSMContext):
+    default_crit = [
+        {"task_number": 1, "skill_text": "1-topshiriq (Nazariy savol): Asosiy tushunchalar", "max_point": 10},
+        {"task_number": 2, "skill_text": "2-topshiriq (Amaliy mashq): Mashq va modellashtirish", "max_point": 10},
+        {"task_number": 3, "skill_text": "3-topshiriq (Masala yechish): Hisoblash va tahlil", "max_point": 10},
+        {"task_number": 4, "skill_text": "4-topshiriq (Loyiha ishi): Amaliy loyiha", "max_point": 20}
+    ]
+    tot_pts = sum(c["max_point"] for c in default_crit)
+    crit_info = {"grade": "Universal", "max_score": tot_pts, "criteria": default_crit}
+    lines = [f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**"]
+    for c in default_crit:
+        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
+    preview = "\n".join(lines)
+
+    await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezon bilan davom etish", callback_data="grade_9")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Ortga", callback_data="back_to_grades")]
+    ])
+    await callback.message.edit_text(f"{preview}\n\nIxtiyoriy fanga moslab ballar va topshiriqlarni o‘zgartirishingiz mumkin:", reply_markup=ikb, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(F.data == "m2_universal_criteria")
+async def cb_m2_universal_criteria(callback: CallbackQuery, state: FSMContext):
+    default_crit = [
+        {"task_number": 1, "skill_text": "1-topshiriq: Nazariy savol va tushunchalar", "max_point": 10},
+        {"task_number": 2, "skill_text": "2-topshiriq: Amaliy mashq va modellar", "max_point": 10},
+        {"task_number": 3, "skill_text": "3-topshiriq: Masala yechish va algoritm", "max_point": 10},
+        {"task_number": 4, "skill_text": "4-topshiriq: Loyiha ishi yoki yakuniy tahlil", "max_point": 20}
+    ]
+    tot_pts = sum(c["max_point"] for c in default_crit)
+    crit_info = {"grade": "Universal", "max_score": tot_pts, "criteria": default_crit}
+    lines = [f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**"]
+    for c in default_crit:
+        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
+    preview = "\n".join(lines)
+
+    await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Ortga", callback_data="m2_back_to_grades")]
+    ])
+    await callback.message.edit_text(f"{preview}\n\nMezonni tasdiqlaysizmi yoki topshiriqlar va ballarini tahrirlaysizmi?", reply_markup=ikb, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(F.data == "m5_universal_criteria")
+async def cb_m5_universal_criteria(callback: CallbackQuery, state: FSMContext):
+    default_crit = [
+        {"task_number": 1, "skill_text": "1-topshiriq: Nazariy savol va tushunchalar", "max_point": 10},
+        {"task_number": 2, "skill_text": "2-topshiriq: Amaliy mashq", "max_point": 10},
+        {"task_number": 3, "skill_text": "3-topshiriq: Masala va hisoblash", "max_point": 10},
+        {"task_number": 4, "skill_text": "4-topshiriq: Loyiha ishi", "max_point": 20}
+    ]
+    tot_pts = sum(c["max_point"] for c in default_crit)
+    crit_info = {"grade": "Universal", "max_score": tot_pts, "criteria": default_crit}
+    lines = [f"📋 **UNIVERSAL BSB MEZONI (Jami: {tot_pts} ball):**"]
+    for c in default_crit:
+        lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
+    preview = "\n".join(lines)
+
+    await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m5_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m5_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Ortga", callback_data="m5_back_to_grades")]
+    ])
+    await callback.message.edit_text(f"{preview}\n\nMezonni tasdiqlaysizmi yoki topshiriqlar va ballarini tahrirlaysizmi?", reply_markup=ikb, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(F.data == "m6_universal_start")
+async def cb_m6_universal_start(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(
+        grade="Universal",
+        subject="CHSB",
+        lang="uz",
+        class_name="Sinf",
+        b_questions=[1, 4, 7],
+        q_questions=[2, 3, 5, 6, 8, 9, 10, 11, 12, 14],
+        m_questions=[13, 15],
+        keys_text="1-A, 2-B, 3-C, 4-D, 5-A, 6-B, 7-C, 8-D, 9-A, 10-B, 11-C, 12-D, 13-A, 14-B, 15-C"
+    )
+    b_str = "1, 4, 7"
+    q_str = "2, 3, 5, 6, 8, 9, 10, 11, 12, 14"
+    m_str = "13, 15"
+    card_text = (
+        "🌐 **UNIVERSAL CHSB (Bahoga moslash)**\n\n"
+        "📋 **Jami: 15 ta test — 40 ball**\n"
+        f"• **[B] Bilish** (3 ta: {b_str}) ➔ 2.0 balldan\n"
+        f"• **[Q] Qo‘llash** (10 ta: {q_str}) ➔ 2.4 balldan\n"
+        f"• **[M] Mulohaza** (2 ta: {m_str}) ➔ 5.0 balldan\n\n"
+        "💡 _Ixtiyoriy fanga moslab mezonni yoki to‘g‘ri javoblar kalitini tahrirlashingiz mumkin:_"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezon va kalit bilan davom etish", callback_data="m6_confirm_all")],
+        [InlineKeyboardButton(text="✏️ Mezon yoki kalitni tahrirlash", callback_data="m6_edit_all")],
+        [InlineKeyboardButton(text="⬅️ Orqaga", callback_data="m6_back_subjects")]
+    ])
+    await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+    await callback.answer()
 
 # ==================== 1-REJIM: BSB BALLAR ORQALI ====================
 @dp.message(F.text.contains("1️⃣ BSB (Ballar orqali)"))
@@ -759,7 +867,7 @@ async def handle_grade_selection(callback: CallbackQuery, state: FSMContext):
         f"✅ **{grade}-sinf Informatika 1-BSB ({crit_info['max_score']} ball)** tanlandi!\n\n"
         f"💡 **eMaktabdan yuklangan rasmiy Excel (.xlsx yoki .xls) faylini yuboring!**\n"
         f"• Excel fayl yuborilsa, **lotin alifbosida 0% imloviy xatosiz va 1 soniyada** mukammal hisobot tayyor bo‘ladi!\n\n"
-        f"⚠️ _Skrinshot (rasm) qabul qilinmaydi, chunki rasmdagi baholarni AI xato o‘qib qo‘yishi mumkin._",
+        f"⚠️ _Skrinshot (rasm) qabul qilinmaydi, chunki rasmdagi baholarni AI Agent xato o‘qib qo‘yishi mumkin._",
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
     )
@@ -883,7 +991,7 @@ async def mode1_fixed_document(message: types.Message, state: FSMContext):
 async def mode1_fixed_photo(message: types.Message, state: FSMContext):
     await message.answer(
         "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
-        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "AI Agent fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
         "Excel orqali hisobot **1 soniyada va 0% xato bilan** tayyor bo‘ladi!",
         parse_mode="Markdown"
     )
@@ -1168,6 +1276,7 @@ async def mode2_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m2_criteria)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m2_universal_criteria")],
         [
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m2_grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m2_grade_7"),
@@ -1618,7 +1727,7 @@ async def mode3_journal_document(message: types.Message, state: FSMContext):
 async def mode3_journal(message: types.Message, state: FSMContext):
     await message.answer(
         "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
-        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "AI Agent fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
         "Excel orqali hisobot **1 soniyada va 0% xato bilan** tayyor bo‘ladi!",
         parse_mode="Markdown"
     )
@@ -1730,7 +1839,7 @@ async def mode4_start(message: types.Message, state: FSMContext):
         "🎯 **4-REJIM: CHSB TESTLARNI TEKSHIRISH (1-CHORAK)**\n\n"
         "🌐 **Universal mezon va kalit (Har qanday fan uchun):**\n"
         "• Istalgan fan (Tarix, Matematika, Ona tili, Fizika, Ingliz tili, Kimyo, Biologiya va b.) uchun (B, Q, M) mezonini hamda 1–15 to‘g‘ri javoblar kalitini o‘zingizga moslab bemalol o‘zgartirishingiz mumkin!\n"
-        "• AI test varaqalaridan o‘quvchining ismi va 1–15 javoblarini o‘qiydi, Python esa siz kiritgan mezon va kalitga qatʼiy amal qilib 100% xatosiz hisoblaydi va Excel tayyorlaydi.\n\n"
+        "• AI Agent test varaqalaridan o‘quvchining ismi va 1–15 javoblarini o‘qiydi hamda mezon va kalit asosida to‘liq hisobot va Excel tayyorlaydi.\n\n"
         "🏛 Shuningdek, tizimda Informatika va Adabiyot fanlarining rasmiy original test mezonlari tayyor mavjud.\n\n"
         "Bo‘limni tanlang:"
     )
@@ -2274,7 +2383,7 @@ async def mode4_edit_keys_text(message: types.Message, state: FSMContext):
 async def mode4_edit_keys_photo(message: types.Message, state: FSMContext):
     msg = (
         "⚠️ **Kalit rasmini jo‘natish shart emas!**\n\n"
-        "AI rasm kalitni o‘qishda adashmasligi uchun, iltimos, kalitni **faqat matn ko‘rinishida** yozing:\n\n"
+        "AI Agent rasm kalitni o‘qishda adashmasligi uchun, iltimos, kalitni **faqat matn ko‘rinishida** yozing:\n\n"
         "Masalan: `1-C, 2-A, 3-D, 4-C, 5-C, 6-A, 7-C, 8-D, 9-A, 10-B, 11-B, 12-D, 13-C, 14-A, 15-C`"
     )
     await message.answer(msg, parse_mode="Markdown")
@@ -2294,7 +2403,7 @@ async def ask_m4_student_tests(message: types.Message):
         "📋 **RASMGA OLISH VA YUBORISH NAMUNASI (Suratga qarang):**\n"
         "• **1-rasm (Oldi tomoni):** O‘quvchi F.I.O.si (masalan: *Erkayev Umidjon 9-B*) va savollar;\n"
         "• **2-rasm (Orqa tomoni):** 1 dan 15 gacha to‘ldirilgan Javoblar jadvali (kalit matrisi);\n"
-        "• AI ikkala rasmni bitta o‘quvchining ishi deb avtomatik birlashtirib tekshiradi!\n\n"
+        "• AI Agent ikkala rasmni bitta o‘quvchining ishi deb avtomatik birlashtirib tekshiradi!\n\n"
         "🚀 _O‘quvchilar test varaqalarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
     if os.path.exists(guide_path):
@@ -2456,7 +2565,7 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
 
     pos, eta = queue_manager.get_queue_info()
     queue_note = f"\n🚦 **Navbatdagi o‘rningiz: №{pos}** (kutilmoqda: ~{eta} soniya)\n" if pos > 1 else ""
-    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**{queue_note}\n\nAI {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti va mezoni bilan solishtirmoqda...")
+    status_msg = await message.answer(f"⏳ **Tekshirish boshlandi!**{queue_note}\n\nAI Agent {len(tlist)} nafar o‘quvchining test varaqasini o‘qib, to‘g‘ri javoblar kaliti va mezoni bilan solishtirmoqda...")
 
     async def update_progress(text):
         try:
@@ -2558,6 +2667,7 @@ async def mode5_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m5_criteria)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Universal mezon (Ixtiyoriy fan/sinf)", callback_data="m5_universal_criteria")],
         [
             InlineKeyboardButton(text="⚡ 6-sinf (30b)", callback_data="m5_grade_6"),
             InlineKeyboardButton(text="⚡ 7-sinf (25b)", callback_data="m5_grade_7"),
@@ -2693,7 +2803,7 @@ async def mode5_criteria_custom_text(message: types.Message, state: FSMContext):
 async def mode5_criteria_photo_rejected(message: types.Message):
     await message.answer(
         "⚠️ **BSB baholash mezonini rasm yoki PDF ko‘rinishida yuklash shart emas!**\n\n"
-        "AI fotosuratdagi mezonni xato o‘qishining oldini olish uchun, mezon tizimda matn holida saqlangan.\n\n"
+        "AI Agent fotosuratdagi mezonni xato o‘qishining oldini olish uchun, mezon tizimda matn holida saqlangan.\n\n"
         "Agar mezonni yoki ballarni o‘zgartirmoqchi bo‘lsangiz, **[✏️ Mezon va ballarni tahrirlash]** tugmasi orqali to‘g‘ridan-to‘g‘ri matn ko‘rinishida istalgancha tahrirlashingiz mumkin!",
         parse_mode="Markdown"
     )
@@ -2788,7 +2898,7 @@ async def mode5_journal_doc(message: types.Message, state: FSMContext):
 async def mode5_journal_photo(message: types.Message, state: FSMContext):
     await message.answer(
         "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
-        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "AI Agent fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
         "Excel orqali hisobot 1 soniyada va 0% xato bilan tayyor bo‘ladi!",
         parse_mode="Markdown"
     )
@@ -2972,6 +3082,7 @@ async def mode6_start(message: types.Message, state: FSMContext):
     await state.set_state(BotStates.m6_select_grade_or_custom)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Universal mezon va kalit (Ixtiyoriy fan)", callback_data="m6_universal_start")],
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m6_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m6_subj_adab")],
         [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m6_to_main_menu")]
@@ -3318,7 +3429,7 @@ async def mode6_journal_doc(message: types.Message, state: FSMContext):
 async def mode6_journal_photo(message: types.Message, state: FSMContext):
     await message.answer(
         "⚠️ **Jurnal skrinshoti (rasmi) qabul qilinmaydi!**\n\n"
-        "AI fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
+        "AI Agent fotosuratdagi baholarni xato o‘qimasligi uchun, iltimos, eMaktabdan yuklangan **rasmiy Excel (.xlsx yoki .xls) faylini** yuboring.\n\n"
         "Excel orqali hisobot 1 soniyada va 0% xato bilan tayyor bo‘ladi!",
         parse_mode="Markdown"
     )
