@@ -81,6 +81,85 @@ Javob FAQAT sof JSON bo'lsin.
             logger.error(f"Gemini journal parse error: {ge}")
             return {}
 
+    def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf") -> Dict[str, Any]:
+        """
+        Darsdagi baholarga qarab 40 ballik CHSB hisobotini o'quvchi ishisiz generatsiya qiladi.
+        B: 6 ball (1, 4, 7-savollar)
+        Q: 24 ball (2, 3, 5, 6, 8, 9, 10, 11, 12, 14-savollar)
+        M: 10 ball (13, 15-savollar)
+        """
+        import random
+        b_q = [1, 4, 7]
+        q_q = [2, 3, 5, 6, 8, 9, 10, 11, 12, 14]
+        m_q = [13, 15]
+
+        students = []
+        for idx, (name, avg_grade) in enumerate(journal_averages.items(), start=1):
+            seed = sum(ord(ch) for ch in name) + idx
+            rng = random.Random(seed)
+
+            if avg_grade >= 9.0:
+                # 5 baho (35 - 40 ball): 0 to 2 wrong
+                num_wrong = rng.choice([0, 1, 1, 2])
+                wrong_pool = q_q + m_q
+                wrong = sorted(rng.sample(wrong_pool, num_wrong)) if num_wrong else []
+                baho_num = 5
+            elif avg_grade >= 7.0:
+                # 4 baho (27 - 34 ball): 2 to 4 wrong
+                num_wrong = rng.choice([2, 3, 3, 4])
+                wrong_m = rng.choice([0, 1, 1])
+                wrong = rng.sample(m_q, min(wrong_m, len(m_q)))
+                rem = num_wrong - len(wrong)
+                wrong += rng.sample(q_q, rem)
+                wrong = sorted(wrong)
+                baho_num = 4
+            elif avg_grade >= 5.0:
+                # 3 baho (13 - 26 ball): 6 to 9 wrong
+                num_wrong = rng.choice([6, 7, 8, 9])
+                wrong = rng.sample(m_q, 2) + rng.sample(b_q, 1) + rng.sample(q_q, num_wrong - 3)
+                wrong = sorted(wrong)
+                baho_num = 3
+            else:
+                # 2 baho (<13 ball): 10 to 12 wrong
+                num_wrong = rng.choice([10, 11, 12])
+                wrong = sorted(rng.sample(b_q + q_q + m_q, num_wrong))
+                baho_num = 2
+
+            b_score = sum(2.0 for q in b_q if q not in wrong)
+            q_score = round(sum(2.4 for q in q_q if q not in wrong), 1)
+            m_score = sum(5.0 for q in m_q if q not in wrong)
+            total = round(b_score + q_score + m_score, 1)
+            if total.is_integer():
+                total = int(total)
+
+            correct_count = 15 - len(wrong)
+            if wrong:
+                wrong_str = ', '.join(f'{w}' for w in wrong)
+                note = f"Dars bahosi: {avg_grade} ({baho_num} baho). {correct_count} ta to‘g‘ri, {len(wrong)} ta xato ({wrong_str}-testlar)."
+            else:
+                note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
+
+            students.append({
+                "tr": idx,
+                "name": name,
+                "total_score": total,
+                "task_scores": [b_score, q_score, m_score],
+                "note": note
+            })
+
+        return {
+            "school_info": {
+                "class_name": class_name,
+                "subject": "Informatika",
+                "quarter": 1,
+                "chsb_number": 1,
+                "max_score": 40,
+                "teacher_name": "Qobilov Obidjon",
+                "head_teacher": "Mahmudova Dilfuzaxon"
+            },
+            "students": students
+        }
+
     def __init__(self):
         self.keys = GEMINI_KEYS
         self.current_key_idx = 0
