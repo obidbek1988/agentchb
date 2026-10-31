@@ -351,11 +351,15 @@ async def check_access_and_notify(message: types.Message) -> (bool, str):
 
     waiting_for_receipt = State()
 
-def get_action_keyboard(show_finish: bool = False):
+def get_action_keyboard(show_finish: bool = False, show_back: bool = True):
     kb = []
     if show_finish:
         kb.append([KeyboardButton(text="✅ Rasmlar tugadi, hisobotni tayyorlang!")])
-    kb.append([KeyboardButton(text="❌ Bekor qilish")])
+    row = []
+    if show_back:
+        row.append(KeyboardButton(text="⬅️ Orqaga"))
+    row.append(KeyboardButton(text="❌ Bekor qilish"))
+    kb.append(row)
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 def get_grade_selection_keyboard():
@@ -375,6 +379,9 @@ def get_grade_selection_keyboard():
         ],
         [
             InlineKeyboardButton(text="📷 Boshqa fan (Yangi mezon rasmi)", callback_data="custom_criteria")
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="to_main_menu")
         ]
     ]
     return InlineKeyboardMarkup(inline_keyboard=inline_kb)
@@ -756,6 +763,19 @@ async def handle_grade_selection(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
+@dp.callback_query(F.data.in_(["to_main_menu", "m4_to_main_menu", "m6_to_main_menu"]))
+async def cb_to_main_menu(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.answer("Asosiy menyuga qaytildi.")
+    await callback.message.answer(
+        "Asosiy menyu:",
+        reply_markup=get_main_keyboard(callback.from_user.id)
+    )
+
 @dp.callback_query(F.data == "view_criteria_menu")
 @dp.callback_query(F.data == "back_to_grades")
 async def handle_criteria_menu(callback: CallbackQuery):
@@ -798,6 +818,15 @@ async def handle_custom_criteria(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 # ==================== 1-REJIM: TAYYOR MEZON BILAN ISHLASH ====================
+@dp.message(BotStates.m1_journal_fixed, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode1_fixed_back(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "📝 **1-REJIM: BSB (Ballar orqali hisobot)**\n\nQaysi sinf hisobotini tayyorlaymiz?",
+        reply_markup=get_grade_selection_keyboard(),
+        parse_mode="Markdown"
+    )
+
 @dp.message(BotStates.m1_journal_fixed, F.document)
 async def mode1_fixed_document(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
@@ -932,6 +961,15 @@ async def mode1_fixed_finish(message: types.Message, state: FSMContext):
         await state.clear()
 
 # ==================== 1-REJIM: BOSHQACHA/YANGI MEZON BILAN ISHLASH ====================
+@dp.message(BotStates.m1_journal, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode1_journal_back(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "📝 **1-REJIM: BSB (Ballar orqali hisobot)**\n\nQaysi sinf hisobotini tayyorlaymiz?",
+        reply_markup=get_grade_selection_keyboard(),
+        parse_mode="Markdown"
+    )
+
 @dp.message(BotStates.m1_journal, F.document)
 async def mode1_journal_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
@@ -1008,6 +1046,11 @@ async def mode1_journal_done(message: types.Message, state: FSMContext):
         "2-qadam: Endi ushbu BSB ning **Baholash mezoni rasmlarini** yuboring (1 yoki 2 sahifa bo‘lsa ham ketma-ket yuboring):",
         reply_markup=get_action_keyboard(show_finish=True)
     )
+
+@dp.message(BotStates.m1_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode1_criteria_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m1_journal)
+    await message.answer("⬅️ **1-QADAM: eMaktab elektron jurnalini yuklashga qaytildi.**\n\nJurnal faylini yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m1_criteria, F.document)
 async def mode1_criteria_document(message: types.Message, state: FSMContext):
@@ -1135,6 +1178,11 @@ async def mode2_start(message: types.Message, state: FSMContext):
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
 
+@dp.message(BotStates.m2_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode2_criteria_back(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Asosiy menyu:", reply_markup=get_main_keyboard(message.from_user.id))
+
 @dp.message(BotStates.m2_criteria, F.document)
 async def mode2_criteria_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
@@ -1191,6 +1239,11 @@ async def cb_m2_skip_keys(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m2_works)
     await ask_m2_works(callback.message)
 
+@dp.message(BotStates.m2_keys, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode2_keys_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m2_criteria)
+    await message.answer("⬅️ **1-QADAM: Mezon rasmini yuborishga qaytildi.**\n\nMezon rasmini yoki PDF faylini yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
+
 @dp.message(BotStates.m2_keys, F.text)
 async def mode2_keys_text(message: types.Message, state: FSMContext):
     if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
@@ -1243,6 +1296,11 @@ async def ask_m2_works(message: types.Message):
         "📸 _O‘quvchilar daftarlari rasmlarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
+
+@dp.message(BotStates.m2_works, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode2_works_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m2_keys)
+    await message.answer("⬅️ **2-QADAM: To‘g‘ri javoblar kalitini kiritishga qaytildi.**\n\nKalitni matn yoki rasm ko‘rinishida yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m2_works, F.document)
 async def mode2_works_doc(message: types.Message, state: FSMContext):
@@ -1407,6 +1465,11 @@ async def mode3_start(message: types.Message, state: FSMContext):
         parse_mode="Markdown"
     )
 
+@dp.message(BotStates.m3_journal, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode3_journal_back(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Asosiy menyu:", reply_markup=get_main_keyboard(message.from_user.id))
+
 @dp.message(BotStates.m3_journal, F.document)
 async def mode3_journal_document(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
@@ -1488,6 +1551,11 @@ async def mode3_journal(message: types.Message, state: FSMContext):
         reply_markup=get_action_keyboard(),
         parse_mode="Markdown"
     )
+
+@dp.message(BotStates.m3_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode3_criteria_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m3_journal)
+    await message.answer("⬅️ **1-QADAM: eMaktab jurnalini yuklashga qaytildi.**\n\nJurnal faylini yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m3_criteria, F.document)
 async def mode3_criteria_doc(message: types.Message, state: FSMContext):
@@ -1584,7 +1652,8 @@ async def mode4_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
+        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m4_to_main_menu")]
     ])
     msg_text = (
         "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
@@ -1644,7 +1713,8 @@ async def cb_m4_back_subjects(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m4_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m4_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
+        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m4_to_main_menu")]
     ])
     msg_text = (
         "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
@@ -1710,7 +1780,8 @@ async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
         [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
         [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
-        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")]
+        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m4_back_to_grades")]
     ])
     await callback.answer()
     await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
@@ -1737,6 +1808,49 @@ async def cb_m4_show_test_pdf(callback: CallbackQuery, state: FSMContext):
     else:
         await callback.answer("Fayl topilmadi.", show_alert=True)
 
+@dp.callback_query(F.data == "m4_back_to_grades")
+async def cb_m4_back_to_grades(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    subject = data.get("subject", "Informatika")
+    if "adab" in subject.lower():
+        await cb_m4_subj_adab(callback, state)
+    else:
+        await cb_m4_subj_info(callback, state)
+
+@dp.callback_query(F.data == "m4_back_to_criteria")
+async def cb_m4_back_to_criteria(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    grade_code = data.get("grade", "9")
+    subject = data.get("subject", "Informatika")
+    lang = data.get("lang", "uz")
+    chsb_info = get_chsb_for_grade(grade_code, subject=subject, lang=lang)
+    if not chsb_info:
+        await callback.answer("Mezon topilmadi.")
+        return
+
+    crit_summary = (
+        f"📋 **MEZON VA BALLAR TAQSIMOTI ({chsb_info['max_score']} ball):**\n"
+        f"{chsb_info['distribution_summary']}\n\n"
+        f"🔢 **1 dan 15 gacha savollar bo‘yicha taqsimot:**\n"
+        f"`{chsb_info['bqm_compact']}`"
+    )
+    card_text = (
+        f"📚 **{chsb_info['title']} ({'Русский класс' if lang == 'ru' else 'O‘zbek sinf'})**\n"
+        f"🏛 _{chsb_info['agency']}_\n"
+        f"📋 **1-CHORAK 1-CHSB (ORIGINAL TEST VARIANTI)**\n"
+        f"Jami: **{chsb_info['total_questions']} ta test — {chsb_info['max_score']} ball**\n\n"
+        f"{crit_summary}\n\n"
+        f"Pastdagi tugmalar orqali test varaqasini ko‘rishingiz yoki mezonni tasdiqlashingiz mumkin:"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
+        [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
+        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m4_back_to_grades")]
+    ])
+    await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
+
 @dp.callback_query(F.data == "m4_edit_criteria")
 async def cb_m4_edit_criteria(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m4_edit_criteria_input)
@@ -1753,7 +1867,37 @@ async def cb_m4_edit_criteria(callback: CallbackQuery, state: FSMContext):
 @dp.message(BotStates.m4_edit_criteria_input, F.text)
 async def mode4_edit_criteria_handler(message: types.Message, state: FSMContext):
     text = (message.text or "").strip()
-    if text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+    if text.lower() in ["⬅️ orqaga", "orqaga", "/back", "back", "❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+        data = await state.get_data()
+        grade_code = data.get("grade", "9")
+        subject = data.get("subject", "Informatika")
+        lang = data.get("lang", "uz")
+        chsb_info = get_chsb_for_grade(grade_code, subject=subject, lang=lang)
+        if chsb_info:
+            await state.set_state(BotStates.m4_select_grade_or_custom)
+            crit_summary = (
+                f"📋 **MEZON VA BALLAR TAQSIMOTI ({chsb_info['max_score']} ball):**\n"
+                f"{chsb_info['distribution_summary']}\n\n"
+                f"🔢 **1 dan 15 gacha savollar bo‘yicha taqsimot:**\n"
+                f"`{chsb_info['bqm_compact']}`"
+            )
+            card_text = (
+                f"📚 **{chsb_info['title']} ({'Русский класс' if lang == 'ru' else 'O‘zbek sinf'})**\n"
+                f"🏛 _{chsb_info['agency']}_\n"
+                f"📋 **1-CHORAK 1-CHSB (ORIGINAL TEST VARIANTI)**\n"
+                f"Jami: **{chsb_info['total_questions']} ta test — {chsb_info['max_score']} ball**\n\n"
+                f"{crit_summary}\n\n"
+                f"Pastdagi tugmalar orqali test varaqasini ko‘rishingiz yoki mezonni tasdiqlashingiz mumkin:"
+            )
+            ikb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m4_show_test_pdf")],
+                [InlineKeyboardButton(text="✅ Shu original mezonni tasdiqlash", callback_data="m4_confirm_criteria")],
+                [InlineKeyboardButton(text="✏️ Mezon (B-Q-M) ni tahrirlash", callback_data="m4_edit_criteria")],
+                [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_pick_custom")],
+                [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m4_back_to_grades")]
+            ])
+            await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
+            return
         await state.set_state(BotStates.m4_select_grade_or_custom)
         await message.answer("Tahrirlash bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
         return
@@ -1820,6 +1964,10 @@ async def mode4_custom_criteria_photo(message: types.Message, state: FSMContext)
         [InlineKeyboardButton(text="✏️ Mezonni tahrirlash", callback_data="m4_edit_criteria")]
     ])
     await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.message(BotStates.m4_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode4_custom_criteria_back(message: types.Message, state: FSMContext):
+    await mode4_start(message, state)
 
 @dp.message(BotStates.m4_criteria, F.document)
 async def mode4_custom_criteria_doc(message: types.Message, state: FSMContext):
@@ -1901,7 +2049,8 @@ async def show_m4_keys_card(message: types.Message, keys_str: str):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Shu to‘g‘ri kalitni tasdiqlash", callback_data="m4_confirm_key")],
         [InlineKeyboardButton(text="✏️ Kalitni o‘zgartirish / tahrirlash", callback_data="m4_edit_key")],
-        [InlineKeyboardButton(text="🔑 Boshqa kalit kiritish (Matn/Rasm)", callback_data="m4_custom_key")]
+        [InlineKeyboardButton(text="🔑 Boshqa kalit kiritish (Matn/Rasm)", callback_data="m4_custom_key")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Mezon kartochkasiga)", callback_data="m4_back_to_criteria")]
     ])
     try:
         await message.edit_text(msg_text, reply_markup=ikb, parse_mode="Markdown")
@@ -1924,7 +2073,7 @@ async def cb_m4_edit_key(callback: CallbackQuery, state: FSMContext):
 @dp.message(BotStates.m4_edit_keys_input, F.text)
 async def mode4_edit_keys_text(message: types.Message, state: FSMContext):
     text = (message.text or "").strip()
-    if text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+    if text.lower() in ["⬅️ orqaga", "orqaga", "/back", "back", "❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
         data = await state.get_data()
         await show_m4_keys_card(message, data.get("keys_text", ""))
         return
@@ -1972,6 +2121,13 @@ async def ask_m4_student_tests(message: types.Message):
         await message.answer_photo(photo, caption=msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
     else:
         await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
+
+@dp.message(BotStates.m4_student_tests, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode4_student_tests_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m4_keys)
+    data = await state.get_data()
+    keys_text = data.get("keys_text", "")
+    await show_m4_keys_card(message, keys_text)
 
 @dp.message(BotStates.m4_student_tests, F.document)
 async def mode4_student_tests_doc(message: types.Message, state: FSMContext):
@@ -2169,6 +2325,11 @@ async def mode5_start(message: types.Message, state: FSMContext):
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
 
+@dp.message(BotStates.m5_criteria, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode5_criteria_back(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("Asosiy menyu:", reply_markup=get_main_keyboard(message.from_user.id))
+
 @dp.message(BotStates.m5_criteria, F.document)
 async def mode5_criteria_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
@@ -2223,6 +2384,11 @@ async def cb_m5_skip_keys(callback: CallbackQuery, state: FSMContext):
     await callback.answer("Keyingi qadamga o'tildi")
     await state.set_state(BotStates.m5_journal)
     await ask_m5_journal(callback.message)
+
+@dp.message(BotStates.m5_keys, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode5_keys_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m5_criteria)
+    await message.answer("⬅️ **1-QADAM: Mezon rasmini yuklashga qaytildi.**\n\nMezon rasmini yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m5_keys, F.text)
 async def mode5_keys_text(message: types.Message, state: FSMContext):
@@ -2279,6 +2445,11 @@ async def ask_m5_journal(message: types.Message):
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(), parse_mode="Markdown")
 
+@dp.message(BotStates.m5_journal, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode5_journal_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m5_keys)
+    await message.answer("⬅️ **2-QADAM: To‘g‘ri javoblar kalitini kiritishga qaytildi.**\n\nKalitni yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
+
 @dp.message(BotStates.m5_journal, F.document)
 async def mode5_journal_doc(message: types.Message, state: FSMContext):
     fname = (message.document.file_name or "").lower()
@@ -2327,6 +2498,11 @@ async def ask_m5_works(message: types.Message):
         "📸 _Daftarlar rasmlarini birin-ketin yuboravering. Barchasini yuborib bo‘lgach, pastdagi **'🚀 Hisobotni tayyorlash'** tugmasini bosing:_"
     )
     await message.answer(msg_text, reply_markup=get_action_keyboard(show_finish=True), parse_mode="Markdown")
+
+@dp.message(BotStates.m5_works, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode5_works_back(message: types.Message, state: FSMContext):
+    await state.set_state(BotStates.m5_journal)
+    await message.answer("⬅️ **3-QADAM: eMaktab jurnalini yuklashga qaytildi.**\n\nJurnal faylini yuboring:", reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
 
 @dp.message(BotStates.m5_works, F.document)
 async def mode5_works_doc(message: types.Message, state: FSMContext):
@@ -2490,7 +2666,8 @@ async def mode6_start(message: types.Message, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m6_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m6_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")]
+        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m6_to_main_menu")]
     ])
     msg_text = (
         "📊 **CHSB HISOBOTINI DARSDAGI BAHOGA MOSLASH (1-CHORAK)**\n\n"
@@ -2551,7 +2728,8 @@ async def cb_m6_back_subjects(callback: CallbackQuery, state: FSMContext):
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 Informatika va AT", callback_data="m6_subj_info")],
         [InlineKeyboardButton(text="📖 Adabiyot", callback_data="m6_subj_adab")],
-        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")]
+        [InlineKeyboardButton(text="🔄 Boshqa fan / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Asosiy menyu", callback_data="m6_to_main_menu")]
     ])
     msg_text = (
         "📊 **CHSB HISOBOTINI DARSDAGI BAHOGA MOSLASH (1-CHORAK)**\n\n"
@@ -2617,7 +2795,8 @@ async def cb_chsb_adj_pick(callback: CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m6_show_test_pdf")],
         [InlineKeyboardButton(text="✅ Shu mezon va kalitni tasdiqlash", callback_data="m6_confirm_all")],
         [InlineKeyboardButton(text="✏️ Mezon yoki kalitni tahrirlash", callback_data="m6_edit_all")],
-        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_adj_pick_custom")]
+        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_adj_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m6_back_to_grades")]
     ])
     await callback.answer()
     await callback.message.edit_text(card_text, reply_markup=ikb, parse_mode="Markdown")
@@ -2638,6 +2817,15 @@ async def cb_m6_show_test_pdf(callback: CallbackQuery, state: FSMContext):
     else:
         await callback.answer("Fayl topilmadi.", show_alert=True)
 
+@dp.callback_query(F.data == "m6_back_to_grades")
+async def cb_m6_back_to_grades(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    subject = data.get("subject", "Informatika")
+    if "adab" in subject.lower():
+        await cb_m6_subj_adab(callback, state)
+    else:
+        await cb_m6_subj_info(callback, state)
+
 @dp.callback_query(F.data == "m6_edit_all")
 async def cb_m6_edit_all(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m6_edit_all_input)
@@ -2654,9 +2842,8 @@ async def cb_m6_edit_all(callback: CallbackQuery, state: FSMContext):
 @dp.message(BotStates.m6_edit_all_input, F.text)
 async def mode6_edit_all_handler(message: types.Message, state: FSMContext):
     text = (message.text or "").strip()
-    if text.lower() in ["❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
-        await state.set_state(BotStates.m6_select_grade_or_custom)
-        await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
+    if text.lower() in ["⬅️ orqaga", "orqaga", "/back", "back", "❌ bekor qilish", "bekor qilish", "/cancel", "cancel"]:
+        await mode6_journal_back(message, state)
         return
 
     await state.update_data(keys_text=text)
@@ -2711,7 +2898,10 @@ async def ask_m6_journal(message: types.Message, state: FSMContext):
         "⚡ Jurnal yuklanishi bilan, tizim o‘quvchilarning dars baholariga moslab 40 ballik CHSB ballarini taqsimlaydi va qaysi savollardan adashganini hisobotning izoh ustuniga avtomatik yozib beradi."
     )
     ikb = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
+        keyboard=[
+            [KeyboardButton(text="⬅️ Orqaga")],
+            [KeyboardButton(text="❌ Bekor qilish")]
+        ],
         resize_keyboard=True
     )
     try:
@@ -2719,6 +2909,43 @@ async def ask_m6_journal(message: types.Message, state: FSMContext):
         await message.answer("Jurnal faylini yuboring 👇", reply_markup=ikb)
     except Exception:
         await message.answer(msg, reply_markup=ikb, parse_mode="Markdown")
+
+@dp.message(BotStates.m6_journal, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
+async def mode6_journal_back(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    grade_code = data.get("grade", "9")
+    subject = data.get("subject", "Informatika")
+    lang = data.get("lang", "uz")
+    chsb_info = get_chsb_for_grade(grade_code, subject=subject, lang=lang)
+    if not chsb_info:
+        await mode6_start(message, state)
+        return
+
+    await state.set_state(BotStates.m6_select_grade_or_custom)
+    crit_summary = (
+        f"📋 **MEZON VA BALLAR TAQSIMOTI ({chsb_info['max_score']} ball):**\n"
+        f"{chsb_info['distribution_summary']}\n\n"
+        f"🔢 **1 dan 15 gacha savollar bo‘yicha taqsimot:**\n"
+        f"`{chsb_info['bqm_compact']}`\n\n"
+        f"🔑 **TO‘G‘RI JAVOBLAR KALITI:**\n"
+        f"`{chsb_info['keys']}`"
+    )
+    card_text = (
+        f"📚 **{chsb_info['title']} ({'Русский класс' if lang == 'ru' else 'O‘zbek sinf'})**\n"
+        f"🏛 _{chsb_info['agency']}_\n"
+        f"📋 **1-CHORAK 1-CHSB MEZONI VA KALITI**\n"
+        f"Jami: **{chsb_info['total_questions']} ta test — {chsb_info['max_score']} ball**\n\n"
+        f"{crit_summary}\n\n"
+        f"Tasdiqlaysizmi yoki o‘zgartirmoqchimisiz?"
+    )
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📄 Original test PDF faylini ko‘rish", callback_data="m6_show_test_pdf")],
+        [InlineKeyboardButton(text="✅ Shu mezon va kalitni tasdiqlash", callback_data="m6_confirm_all")],
+        [InlineKeyboardButton(text="✏️ Mezon yoki kalitni tahrirlash", callback_data="m6_edit_all")],
+        [InlineKeyboardButton(text="🔄 Boshqa mezon yuklash", callback_data="chsb_adj_pick_custom")],
+        [InlineKeyboardButton(text="⬅️ Orqaga (Sinfni o‘zgartirish)", callback_data="m6_back_to_grades")]
+    ])
+    await message.answer(card_text, reply_markup=ikb, parse_mode="Markdown")
 
 @dp.message(BotStates.m6_journal, F.document)
 async def mode6_journal_doc(message: types.Message, state: FSMContext):
