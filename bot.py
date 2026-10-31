@@ -2254,7 +2254,7 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
         )
         chosen_grade = data.get("grade", "")
         detected_class = str(parsed.get("school_info", {}).get("class_name", "")).strip()
-        if chosen_grade in ["9", "10", "11"]:
+        if chosen_grade in ["5", "6", "7", "8", "9", "10", "11"]:
             if chosen_grade in detected_class:
                 cname = detected_class
             elif any(ch.isalpha() for ch in detected_class):

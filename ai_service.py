@@ -14,6 +14,20 @@ from queue_manager import queue_manager
 logger = logging.getLogger(__name__)
 
 class AIService:
+    def __init__(self):
+        self.keys = GEMINI_KEYS
+        self.current_key_idx = 0
+
+    def _get_next_key(self) -> str:
+        if not self.keys:
+            raw = os.getenv("GEMINI_API_KEYS", "") or os.getenv("GEMINI_API_KEY", "")
+            self.keys = [k.strip() for k in raw.split(",") if k.strip()]
+        if not self.keys:
+            raise ValueError("GEMINI_API_KEYS sozlanmagan! .env faylga Gemini API kalitini kiriting.")
+        key = self.keys[self.current_key_idx % len(self.keys)]
+        self.current_key_idx += 1
+        return key
+
     def _optimize_image(self, path: str) -> Optional[Image.Image]:
         if not path or not os.path.exists(path):
             return None
