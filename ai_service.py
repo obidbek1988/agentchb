@@ -1,3 +1,4 @@
+from cyrillic_translit import to_uzbek_latin
 import os
 import json
 import logging
@@ -60,7 +61,7 @@ class AIService:
                     if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
                         m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
                         if m:
-                            detected_cname = m.group(1).upper().replace("_", "-")
+                            detected_cname = to_uzbek_latin(m.group(1).upper().replace("_", "-"))
 
                     if len(row_vals) >= 3:
                         col0 = row_vals[0]
@@ -76,7 +77,7 @@ class AIService:
                             daily = [g for g in grades if g <= 10.0]
                             if daily:
                                 avg = round(sum(daily) / len(daily), 1)
-                                res[col1] = avg
+                                res[to_uzbek_latin(col1)] = avg
                 if len(res) >= 3:
                     return (detected_cname, res)
             except Exception as e_xlrd:
@@ -94,7 +95,7 @@ class AIService:
                     if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
                         m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
                         if m:
-                            detected_cname = m.group(1).upper().replace("_", "-")
+                            detected_cname = to_uzbek_latin(m.group(1).upper().replace("_", "-"))
 
                     if len(row_vals) >= 2:
                         col0 = row_vals[0]
@@ -115,7 +116,7 @@ class AIService:
                             daily = [g for g in grades if g <= 10.0]
                             if daily:
                                 avg = round(sum(daily) / len(daily), 1)
-                                res[name_candidate] = avg
+                                res[to_uzbek_latin(name_candidate)] = avg
                 if len(res) >= 3:
                     return (detected_cname, res)
             except Exception as e_openpyxl:
@@ -140,7 +141,7 @@ class AIService:
                             if "sinf:" in row_str.lower() and detected_cname == "9-sinf":
                                 m = re.search(r"sinf:\s*([0-9]+-?[a-zA-Zа-яА-Я]+)", row_str, re.IGNORECASE)
                                 if m:
-                                    detected_cname = m.group(1).upper().replace("_", "-")
+                                    detected_cname = to_uzbek_latin(m.group(1).upper().replace("_", "-"))
 
                             if len(row) >= 3:
                                 col0 = row[0].strip()
@@ -156,7 +157,7 @@ class AIService:
                                     daily = [g for g in grades if g <= 10.0]
                                     if daily:
                                         avg = round(sum(daily) / len(daily), 1)
-                                        res[col1] = avg
+                                        res[to_uzbek_latin(col1)] = avg
                         if len(res) >= 3:
                             return (detected_cname, res)
                 except Exception:
@@ -197,14 +198,21 @@ Javob FAQAT sof JSON bo'lsin.
     def generate_chsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf") -> Dict[str, Any]:
         """
         Darsdagi baholarga qarab 40 ballik CHSB hisobotini o'quvchi ishisiz generatsiya qiladi.
-        B: 6 ball (1, 4, 7-savollar)
-        Q: 24 ball (2, 3, 5, 6, 8, 9, 10, 11, 12, 14-savollar)
-        M: 10 ball (13, 15-savollar)
+        9, 10 va 11-sinf uchun tegishli B, Q, M taqsimoti va rasmiy kalitlardan foydalanadi.
         """
         import random
-        b_q = [1, 4, 7]
-        q_q = [2, 3, 5, 6, 8, 9, 10, 11, 12, 14]
-        m_q = [13, 15]
+        from criteria_store import get_chsb_for_grade
+        from cyrillic_translit import to_uzbek_latin
+
+        chsb_cfg = get_chsb_for_grade(class_name) or get_chsb_for_grade("9")
+        b_q = chsb_cfg.get("b_questions", [1, 4, 7])
+        q_q = chsb_cfg.get("q_questions", [2, 3, 5, 6, 8, 9, 10, 11, 12, 14])
+        m_q = chsb_cfg.get("m_questions", [13, 15])
+        official_keys = chsb_cfg.get("key_dict", {
+            1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C',
+            6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B',
+            11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'
+        })
 
         students = []
         for idx, (name, avg_grade) in enumerate(journal_averages.items(), start=1):
@@ -212,13 +220,11 @@ Javob FAQAT sof JSON bo'lsin.
             rng = random.Random(seed)
 
             if avg_grade >= 9.0:
-                # 5 baho (35 - 38 ball): 1 to 2 wrong (hech qachon 40 dan 40 chiqmasin, haqiqatga mos bo'lishi uchun)
                 num_wrong = rng.choice([1, 1, 2])
                 wrong_pool = q_q + m_q
                 wrong = sorted(rng.sample(wrong_pool, num_wrong))
                 baho_num = 5
             elif avg_grade >= 7.0:
-                # 4 baho (27 - 34 ball): 2 to 4 wrong
                 num_wrong = rng.choice([2, 3, 3, 4])
                 wrong_m = rng.choice([0, 1, 1])
                 wrong = rng.sample(m_q, min(wrong_m, len(m_q)))
@@ -227,15 +233,14 @@ Javob FAQAT sof JSON bo'lsin.
                 wrong = sorted(wrong)
                 baho_num = 4
             elif avg_grade >= 5.0:
-                # 3 baho (13 - 26 ball): 6 to 9 wrong
                 num_wrong = rng.choice([6, 7, 8, 9])
-                wrong = rng.sample(m_q, 2) + rng.sample(b_q, 1) + rng.sample(q_q, num_wrong - 3)
-                wrong = sorted(wrong)
+                wrong = rng.sample(m_q, min(2, len(m_q))) + rng.sample(b_q, 1) + rng.sample(q_q, max(1, num_wrong - 3))
+                wrong = sorted(list(set(wrong)))
                 baho_num = 3
             else:
-                # 2 baho (<13 ball): 10 to 12 wrong
                 num_wrong = rng.choice([10, 11, 12])
-                wrong = sorted(rng.sample(b_q + q_q + m_q, num_wrong))
+                all_pool = b_q + q_q + m_q
+                wrong = sorted(rng.sample(all_pool, min(num_wrong, len(all_pool))))
                 baho_num = 2
 
             b_score = sum(2.0 for q in b_q if q not in wrong)
@@ -243,7 +248,6 @@ Javob FAQAT sof JSON bo'lsin.
             m_score = sum(5.0 for q in m_q if q not in wrong)
             total = round(b_score + q_score + m_score, 1)
 
-            # Qat'iy talab: 40 dan 40 chiqarmaslik, haqiqatga mos bo'lishi uchun
             if total >= 40.0:
                 forced = rng.choice(q_q)
                 if forced not in wrong:
@@ -264,15 +268,9 @@ Javob FAQAT sof JSON bo'lsin.
             else:
                 note = f"Dars bahosi: {avg_grade} ({baho_num} baho). Barcha 15 ta test to‘g‘ri yechilgan (100%)."
 
-            # 1 dan 15 gacha o'quvchi belgilagan kalitlar qatori (xatolar ❌ bilan)
-            OFFICIAL_KEYS_9 = {
-                1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C',
-                6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B',
-                11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'
-            }
             student_keys = []
             for q_num in range(1, 16):
-                corr = OFFICIAL_KEYS_9.get(q_num, "A")
+                corr = official_keys.get(q_num, "A")
                 if q_num in wrong:
                     wrong_choices = [c for c in ["A", "B", "C", "D"] if c != corr]
                     picked = rng.choice(wrong_choices)
@@ -283,16 +281,16 @@ Javob FAQAT sof JSON bo'lsin.
 
             students.append({
                 "tr": idx,
-                "name": name,
+                "name": to_uzbek_latin(name),
                 "total_score": total,
                 "task_scores": [b_score, q_score, m_score],
-                "note": note,
+                "note": to_uzbek_latin(note),
                 "keys_str": keys_str
             })
 
         return {
             "school_info": {
-                "class_name": class_name,
+                "class_name": to_uzbek_latin(class_name),
                 "subject": "Informatika",
                 "quarter": 1,
                 "chsb_number": 1,
@@ -302,156 +300,6 @@ Javob FAQAT sof JSON bo'lsin.
             },
             "students": students
         }
-
-    def __init__(self):
-        self.keys = GEMINI_KEYS
-        self.current_key_idx = 0
-
-    def _get_next_key(self) -> str:
-        if not self.keys:
-            raise ValueError("GEMINI_API_KEYS sozlanmagan! .env faylga Gemini kalitini qo'shing.")
-        key = self.keys[self.current_key_idx % len(self.keys)]
-        self.current_key_idx += 1
-        return key
-
-    # 1-TUGMA: BSB ballar bo'yicha
-    async def parse_bsb_data(self, journal_img_paths: Any, criteria_img_paths: Any) -> Dict[str, Any]:
-        return await queue_manager.execute_task(
-            self._call_bsb_vision, journal_img_paths, criteria_img_paths
-        )
-
-    async def parse_bsb_with_fixed_criteria(self, journal_img_paths: Any, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
-        return await queue_manager.execute_task(
-            self._call_bsb_fixed_vision, journal_img_paths, fixed_criteria_info
-        )
-
-    def _call_bsb_fixed_vision(self, journal_img_paths: Any, fixed_criteria_info: Dict[str, Any]) -> Dict[str, Any]:
-        criteria_list = fixed_criteria_info["criteria"]
-        max_score = fixed_criteria_info["max_score"]
-        crit_desc = "\n".join([f"Topshiriq {c['task_number']} (maks: {c['max_point']} ball): {c['skill_text']}" for c in criteria_list])
-
-        j_list = journal_img_paths if isinstance(journal_img_paths, list) else [journal_img_paths]
-
-        prompt = f"""
-Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
-Yuborilgan {len(j_list)} ta rasm: eMaktab elektron jurnali skrinshotlari (o'quvchilar va ularning BSB ballari).
-Agar sinfda o'quvchilar ko'p bo'lib 2 ta yoki undan ortiq rasm bo'lsa, ularni ketma-ket birlashtirib, tartib raqami (tr) bo'yicha bitta umumiy ro'yxat qiling!
-
-Rasmiy Baholash mezonlari:
-{crit_desc}
-Maksimal umumiy ball: {max_score}
-
-JUDA MUHIM QOIDALAR (BSB USTUNIDAN BALLARNI OLISH):
-1. Chap ustun: O'quvchilarning To'liq ism-familiyasi.
-2. O'rtadagi kundalik dars baholari (Dj ustunlari: 10, 9, 8...) va davomat (K, S) - BULAR BSB BALI EMAS!
-3. DIQQAT BSB USTUNI: Jurnaldagi sanalar orasida yoki o'ngrog'ida 'BSB', '1-BSB' yoki 'BSB-1 [50 ball]' deb belgilangan alohida ustun bor (masalan: '17.10 BSB-1' yashil rangli katakchalar bilan).
-Aynan shu ustundagi ballarni oling (masalan: 44, 35, 44, 43, 38, 44...)!
-4. AGAR BITTA BSB USTUNI BO'SH BO'LSA, ALBATTA NARIGI BSB USTUNIGA QARANG! (Chunki 1-guruh va 2-guruh alohida ustunda bo'lishi mumkin, yoki sanasi boshqa bo'lishi mumkin). O'quvchining bali qaysi BSB ustunida bo'lsa, o'sha ustundagi ballni oling!
-5. Har bir o'quvchi to'g'risidagi o'sha 'BSB' ustunidagi ballni 'total_score' ga aniq yozing.
-6. Agar o'quvchida BSB bali bo'lsa (masalan 44, 35, 43...) -> total_score ga aynan o'sha sonni yozing! Faqat ikkala BSB ustunida ham ball bo'lmasa, total_score: null bo'ladi.
-
-Quyidagi JSON formatida qaytaring:
-{{
-  "school_info": {{
-    "class_name": "{fixed_criteria_info.get('class_name', '')}",
-    "subject": "{fixed_criteria_info.get('subject', 'Informatika')}",
-    "quarter": {fixed_criteria_info.get('quarter', 1)},
-    "bsb_number": {fixed_criteria_info.get('bsb_number', 1)},
-    "max_score": {max_score},
-    "teacher_name": "Qobilov Obidjon",
-    "head_teacher": "Mahmudova Dilfuzaxon"
-  }},
-  "students": [
-    {{
-      "tr": 1,
-      "name": "O'quvchi F.I.O",
-      "total_score": 44,
-      "task_scores": [9, 9, 10, 7, 9]
-    }}
-  ]
-}}
-Javob FAQAT sof JSON bo'lsin.
-"""
-        res = self._send_prompt_to_gemini(prompt, j_list)
-        res["criteria"] = criteria_list
-        if "school_info" in res:
-            res["school_info"]["max_score"] = max_score
-            res["school_info"]["subject"] = fixed_criteria_info.get("subject", "Informatika")
-
-        # Guarantee task_scores are accurately allocated in Python
-        from emaktab_parser import distribute_score_to_tasks, clean_score
-        for st in res.get("students", []):
-            raw_tot = st.get("total_score")
-            tot = clean_score(raw_tot)
-            st["total_score"] = tot
-            st["task_scores"] = distribute_score_to_tasks(tot, criteria_list)
-
-        return res
-
-    def _call_bsb_vision(self, journal_img_paths: Any, criteria_img_paths: Any) -> Dict[str, Any]:
-        j_list = journal_img_paths if isinstance(journal_img_paths, list) else [journal_img_paths]
-        c_list = criteria_img_paths if isinstance(criteria_img_paths, list) else [criteria_img_paths]
-
-        prompt = f"""
-Siz umumta'lim maktablarining BSB hisobotlarini shakllantiruvchi yordamchisiz.
-Dastlabki {len(j_list)} ta rasm: eMaktab elektron jurnali skrinshotlari (barcha o'quvchilar va ularning BSB ballari).
-Keyingi {len(c_list)} ta rasm: Rasmiy Baholash mezoni jadvali (ko'nikmalar matni va ajratilgan ballar, bir nechta sahifa bo'lishi mumkin).
-
-JUDA MUHIM QOIDALAR (BSB USTUNIDAN BALLARNI OLISH):
-1. Mezon rasmlaridagi barcha mezonlarni to'liq aniqlang (har doim Bosh harf bilan boshlansin, oxiriga '\\n\\nJami: X ball' yozilsin).
-2. Jurnalda dars baholarini (Dj) EMAS, aynan 'BSB' / 'BSB-1' deb belgilangan ustundagi ballarni (masalan: 44, 35, 43, 38...) har bir o'quvchining 'total_score' siga oling!
-3. AGAR BITTA BSB USTUNI BO'SH BO'LSA, ALBATTA NARIGI BSB USTUNIGA QARANG! O'quvchining bali qaysi BSB ustunida yozilgan bo'lsa, o'sha ustundagi ballni oling!
-4. Agar o'quvchida BSB bali bo'lsa, 'total_score' ga aynan o'sha sonni yozing. Faqat ikkala BSB ustunida ham ball bo'lmasa, total_score: null bo'ladi.
-
-Quyidagi JSON formatida qaytaring:
-{{
-  "school_info": {{
-    "class_name": "10-B",
-    "subject": "Informatika",
-    "quarter": 1,
-    "bsb_number": 1,
-    "max_score": 50,
-    "teacher_name": "Qobilov Obidjon",
-    "head_teacher": "Mahmudova Dilfuzaxon"
-  }},
-  "criteria": [
-    {{
-      "task_number": 1,
-      "skill_text": "Maʼlumot, axborot va bilimlar bazasi oʻrtasidagi farqlarni tushunadi;\\n\\nJami: 10 ball",
-      "max_point": 10
-    }}
-  ],
-  "students": [
-    {{
-      "tr": 1,
-      "name": "Abdullayeva Muslimaxon",
-      "total_score": null,
-      "task_scores": [null, null, null, null, null]
-    }},
-    {{
-      "tr": 2,
-      "name": "Abdumannonova Lazizabonu",
-      "total_score": 44,
-      "task_scores": [10, 8, 9, 9, 8]
-    }}
-  ]
-}}
-Javob FAQAT sof JSON bo'lsin.
-"""
-        all_imgs = j_list + c_list
-        res = self._send_prompt_to_gemini(prompt, all_imgs)
-
-        # Guarantee task_scores are accurately allocated in Python
-        from emaktab_parser import distribute_score_to_tasks, clean_score
-        c_list_parsed = res.get("criteria", [])
-        for st in res.get("students", []):
-            raw_tot = st.get("total_score")
-            tot = clean_score(raw_tot)
-            st["total_score"] = tot
-            if c_list_parsed:
-                st["task_scores"] = distribute_score_to_tasks(tot, c_list_parsed)
-
-        return res
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:

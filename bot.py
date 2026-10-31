@@ -1583,19 +1583,23 @@ async def mode4_start(message: types.Message, state: FSMContext):
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 9-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_9")],
+        [InlineKeyboardButton(text="💻 10-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_10")],
+        [InlineKeyboardButton(text="💻 11-sinf Informatika (Original test & mezon)", callback_data="chsb_pick_11")],
         [InlineKeyboardButton(text="🔄 Boshqa sinf / O‘z mezoningizni yuklash", callback_data="chsb_pick_custom")]
     ])
     msg_text = (
         "🎯 **CHSB TEST TAHLILI VA HISOBOTI (1-CHORAK)**\n\n"
         "Fan: **Informatika va axborot texnologiyalari (O‘zbek sinf)**\n\n"
-        "🏛 Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazining **9-sinf original test varianti va mezoni** tizimda tayyor mavjud!\n\n"
+        "🏛 Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazining **9, 10 va 11-sinf original test variantlari va mezonlari** tizimda tayyor mavjud!\n\n"
+        "📢 _Boshqa fanlar (Tarix, Ona tili, Ingliz tili, Matematika, Biologiya...) uchun ham test va mezonlarni agentga qo‘shib beramiz! Murojaat: @Obidbek1988_\n\n"
         "Quyidagilardan birini tanlang:"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data == "chsb_pick_9")
-async def cb_chsb_pick_9(callback: CallbackQuery, state: FSMContext):
-    chsb_info = get_chsb_for_grade("9")
+@dp.callback_query(F.data.in_(["chsb_pick_9", "chsb_pick_10", "chsb_pick_11"]))
+async def cb_chsb_pick(callback: CallbackQuery, state: FSMContext):
+    grade_code = callback.data.replace("chsb_pick_", "")
+    chsb_info = get_chsb_for_grade(grade_code)
     if not chsb_info:
         await callback.answer("Ma'lumot topilmadi.")
         return
@@ -1607,7 +1611,7 @@ async def cb_chsb_pick_9(callback: CallbackQuery, state: FSMContext):
         f"`{chsb_info['bqm_compact']}`"
     )
     await state.update_data(
-        grade="9",
+        grade=grade_code,
         criteria_text=crit_summary,
         criteria_path="",
         keys_text=chsb_info["keys"],
@@ -1636,12 +1640,13 @@ async def cb_chsb_pick_9(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "m4_show_test_pdf")
 async def cb_m4_show_test_pdf(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    pdf_path = data.get("pdf_path", "") or "assets/9_sinf_informatika_chsb1_original.pdf"
+    grade = data.get("grade", "9")
+    pdf_path = data.get("pdf_path", "") or f"assets/{grade}_sinf_informatika_chsb1_original.pdf"
     if os.path.exists(pdf_path):
-        doc = FSInputFile(pdf_path, filename="9_sinf_Informatika_1_CHSB_Original_Test.pdf")
+        doc = FSInputFile(pdf_path, filename=f"{grade}_sinf_Informatika_1_CHSB_Original_Test.pdf")
         await callback.message.answer_document(
             doc,
-            caption="📄 **9-sinf Informatika 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**\n\nUshbu test varianti asosida baholash mezoni va to‘g‘ri javoblar kaliti tuzilgan.",
+            caption=f"📄 **{grade}-sinf Informatika 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**\n\nUshbu test varianti asosida baholash mezoni va to‘g‘ri javoblar kaliti tuzilgan.",
             parse_mode="Markdown"
         )
         await callback.answer("PDF yuborildi.")
@@ -2009,15 +2014,14 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
         )
         chosen_grade = data.get("grade", "")
         detected_class = str(parsed.get("school_info", {}).get("class_name", "")).strip()
-        if chosen_grade == "9":
-            # Agar 9-sinf tanlangan bo'lsa, AI adashib 6-G deb olmasin
-            if "9" in detected_class:
+        if chosen_grade in ["9", "10", "11"]:
+            if chosen_grade in detected_class:
                 cname = detected_class
             elif any(ch.isalpha() for ch in detected_class):
                 letter = "".join([c for c in detected_class if c.isalpha()]).upper()
-                cname = f"9-{letter}"
+                cname = f"{chosen_grade}-{letter}"
             else:
-                cname = "9-B"
+                cname = f"{chosen_grade}-B"
         else:
             cname = detected_class or (f"{chosen_grade}-sinf" if chosen_grade else "9-sinf")
 
@@ -2391,6 +2395,8 @@ async def mode6_start(message: types.Message, state: FSMContext):
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💻 9-sinf Informatika (Original test & mezon)", callback_data="chsb_adj_pick_9")],
+        [InlineKeyboardButton(text="💻 10-sinf Informatika (Original test & mezon)", callback_data="chsb_adj_pick_10")],
+        [InlineKeyboardButton(text="💻 11-sinf Informatika (Original test & mezon)", callback_data="chsb_adj_pick_11")],
         [InlineKeyboardButton(text="🔄 Boshqa sinf / O‘z mezoningizni kiritish", callback_data="chsb_adj_pick_custom")]
     ])
     msg_text = (
@@ -2398,13 +2404,16 @@ async def mode6_start(message: types.Message, state: FSMContext):
         "Fan: **Informatika va axborot texnologiyalari (O‘zbek sinf)**\n\n"
         "💡 **Ushbu rejimda o‘quvchilar test varaqalarini yuklash SHART EMAS!**\n"
         "Faqat eMaktab jurnali (Excel, PDF yoki skrinshot) yuklasangiz kifoya — tizim darsdagi baholarga qarab har bir o‘quvchiga mos CHSB ballini (B-Q-M bo‘yicha) va qaysi savollardan adashganini hisobotga chiqarib beradi.\n\n"
+        "🏛 **9, 10 va 11-sinf original test mezonlari** tizimda tayyor mavjud!\n\n"
+        "📢 _Boshqa fanlar (Tarix, Ona tili, Ingliz tili, Matematika, Biologiya...) uchun ham maxsus mezonlarni agentga qo‘shib beramiz: @Obidbek1988_\n\n"
         "Quyidagilardan birini tanlang:"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
 
-@dp.callback_query(F.data == "chsb_adj_pick_9")
-async def cb_chsb_adj_pick_9(callback: CallbackQuery, state: FSMContext):
-    chsb_info = get_chsb_for_grade("9")
+@dp.callback_query(F.data.in_(["chsb_adj_pick_9", "chsb_adj_pick_10", "chsb_adj_pick_11"]))
+async def cb_chsb_adj_pick(callback: CallbackQuery, state: FSMContext):
+    grade_code = callback.data.replace("chsb_adj_pick_", "")
+    chsb_info = get_chsb_for_grade(grade_code)
     if not chsb_info:
         await callback.answer("Ma'lumot topilmadi.")
         return
@@ -2418,7 +2427,7 @@ async def cb_chsb_adj_pick_9(callback: CallbackQuery, state: FSMContext):
         f"`{chsb_info['keys']}`"
     )
     await state.update_data(
-        grade="9",
+        grade=grade_code,
         criteria_text=crit_summary,
         criteria_path="",
         keys_text=chsb_info["keys"],
@@ -2446,12 +2455,13 @@ async def cb_chsb_adj_pick_9(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "m6_show_test_pdf")
 async def cb_m6_show_test_pdf(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    pdf_path = data.get("pdf_path", "") or "assets/9_sinf_informatika_chsb1_original.pdf"
+    grade = data.get("grade", "9")
+    pdf_path = data.get("pdf_path", "") or f"assets/{grade}_sinf_informatika_chsb1_original.pdf"
     if os.path.exists(pdf_path):
-        doc = FSInputFile(pdf_path, filename="9_sinf_Informatika_1_CHSB_Original_Test.pdf")
+        doc = FSInputFile(pdf_path, filename=f"{grade}_sinf_Informatika_1_CHSB_Original_Test.pdf")
         await callback.message.answer_document(
             doc,
-            caption="📄 **9-sinf Informatika 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**",
+            caption=f"📄 **{grade}-sinf Informatika 1-CHSB Original test varianti (Markaz testi, 15 ta savol)**",
             parse_mode="Markdown"
         )
         await callback.answer("PDF yuborildi.")

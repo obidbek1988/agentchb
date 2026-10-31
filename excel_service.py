@@ -1,3 +1,4 @@
+from cyrillic_translit import to_uzbek_latin
 import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -37,13 +38,13 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     criteria = data.get("criteria", [])
     students = data.get("students", [])
 
-    class_name = school_info.get("class_name", "")
+    class_name = to_uzbek_latin(school_info.get("class_name", ""))
     subject = school_info.get("subject", "Informatika")
     quarter = school_info.get("quarter", 1)
     bsb_number = school_info.get("bsb_number", 1)
     max_score = school_info.get("max_score", 50)
-    teacher_name = school_info.get("teacher_name", "Qobilov Obidjon")
-    head_teacher = school_info.get("head_teacher", "Mahmudova Dilfuzaxon")
+    teacher_name = to_uzbek_latin(school_info.get("teacher_name", "Qobilov Obidjon"))
+    head_teacher = to_uzbek_latin(school_info.get("head_teacher", "Mahmudova Dilfuzaxon"))
 
     title_text = (
         "BSB tahlil Bayonnomasi\n"
@@ -82,7 +83,7 @@ def build_bsb_excel(data: Dict[str, Any], output_path: str) -> str:
     start_row = 3
     for idx, st in enumerate(students, start=1):
         curr_row = start_row + idx - 1
-        name = st.get("name", "")
+        name = to_uzbek_latin(st.get("name", ""))
         tot = st.get("total_score")
         task_scores = st.get("task_scores")
 
@@ -185,13 +186,13 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     school_info = data.get("school_info", {})
     students = data.get("students", [])
 
-    class_name = school_info.get("class_name", "")
+    class_name = to_uzbek_latin(school_info.get("class_name", ""))
     subject = school_info.get("subject", "Informatika")
     quarter = school_info.get("quarter", 1)
     chsb_number = school_info.get("chsb_number", 1)
     max_score = school_info.get("max_score", 40)
-    teacher_name = school_info.get("teacher_name", "Qobilov Obidjon")
-    head_teacher = school_info.get("head_teacher", "Mahmudova Dilfuzaxon")
+    teacher_name = to_uzbek_latin(school_info.get("teacher_name", "Qobilov Obidjon"))
+    head_teacher = to_uzbek_latin(school_info.get("head_teacher", "Mahmudova Dilfuzaxon"))
 
     title_text = (
         "CHSB test tahlil Bayonnomasi\n"
@@ -231,7 +232,7 @@ def build_chsb_excel(data: Dict[str, Any], output_path: str) -> str:
     start_row = 3
     for idx, st in enumerate(students, start=1):
         curr_row = start_row + idx - 1
-        name = st.get("name", "")
+        name = to_uzbek_latin(st.get("name", ""))
         # Expecting task_scores: [B, Q, M]
         bqm = st.get("task_scores", [None, None, None])
         tot = st.get("total_score")

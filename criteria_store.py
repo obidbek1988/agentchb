@@ -260,7 +260,69 @@ INFORMATIKA_1_CHORAK_CHSB: Dict[str, Dict[str, Any]] = {
             "1-C, 2-A, 3-D, 4-C, 5-C\n"
             "6-A, 7-C, 8-D, 9-A, 10-B\n"
             "11-B, 12-D, 13-C, 14-A, 15-C"
-        )
+        ),
+        "b_questions": [1, 4, 7],
+        "q_questions": [2, 3, 5, 6, 8, 9, 10, 11, 12, 14],
+        "m_questions": [13, 15],
+        "key_dict": {1: 'C', 2: 'A', 3: 'D', 4: 'C', 5: 'C', 6: 'A', 7: 'C', 8: 'D', 9: 'A', 10: 'B', 11: 'B', 12: 'D', 13: 'C', 14: 'A', 15: 'C'}
+    },
+    "10": {
+        "title": "10-sinf Informatika va axborot texnologiyalari",
+        "doc_title": "2026-2027-o‘quv yili 10-sinf Informatika 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "10-sinf",
+        "subject": "Informatika",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/10_sinf_informatika_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 7, 11-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 2, 3, 4, 5, 6, 8, 9, 12, 13, 14-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 10, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(Q)  3.(Q)  4.(Q)  5.(Q)\n6.(Q)  7.(B)  8.(Q)  9.(Q)  10.(M)\n11.(B) 12.(Q) 13.(Q) 14.(Q) 15.(M)",
+        "keys": "1-B, 2-A, 3-A, 4-C, 5-D, 6-B, 7-B, 8-D, 9-C, 10-A, 11-B, 12-B, 13-A, 14-C, 15-B",
+        "keys_formatted": (
+            "1-B, 2-A, 3-A, 4-C, 5-D\n"
+            "6-B, 7-B, 8-D, 9-C, 10-A\n"
+            "11-B, 12-B, 13-A, 14-C, 15-B"
+        ),
+        "b_questions": [1, 7, 11],
+        "q_questions": [2, 3, 4, 5, 6, 8, 9, 12, 13, 14],
+        "m_questions": [10, 15],
+        "key_dict": {1: 'B', 2: 'A', 3: 'A', 4: 'C', 5: 'D', 6: 'B', 7: 'B', 8: 'D', 9: 'C', 10: 'A', 11: 'B', 12: 'B', 13: 'A', 14: 'C', 15: 'B'}
+    },
+    "11": {
+        "title": "11-sinf Informatika va axborot texnologiyalari",
+        "doc_title": "2026-2027-o‘quv yili 11-sinf Informatika 1-CHSB (Original)",
+        "agency": "Pedagogik mahorat va xalqaro baholash ilmiy-amaliy markazi",
+        "class_name": "11-sinf",
+        "subject": "Informatika",
+        "quarter": 1,
+        "chsb_number": 1,
+        "max_score": 40,
+        "total_questions": 15,
+        "pdf_path": "assets/11_sinf_informatika_chsb1_original.pdf",
+        "distribution_summary": (
+            "• **(B) Bilish:** 1, 2, 6-savollar (har biri 2 balldan = 6 ball)\n"
+            "• **(Q) Qo‘llash:** 3, 4, 5, 7, 8, 9, 10, 11, 12, 13-savollar (har biri 2.4 balldan = 24 ball)\n"
+            "• **(M) Mulohaza:** 14, 15-savollar (har biri 5 balldan = 10 ball)\n"
+            "**Jami: 15 ta test — 40 ball**"
+        ),
+        "bqm_compact": "1.(B)  2.(B)  3.(Q)  4.(Q)  5.(Q)\n6.(B)  7.(Q)  8.(Q)  9.(Q)  10.(Q)\n11.(Q) 12.(Q) 13.(Q) 14.(M) 15.(M)",
+        "keys": "1-B, 2-A, 3-B, 4-A, 5-C, 6-B, 7-A, 8-A, 9-B, 10-C, 11-A, 12-D, 13-B, 14-B, 15-D",
+        "keys_formatted": (
+            "1-B, 2-A, 3-B, 4-A, 5-C\n"
+            "6-B, 7-A, 8-A, 9-B, 10-C\n"
+            "11-A, 12-D, 13-B, 14-B, 15-D"
+        ),
+        "b_questions": [1, 2, 6],
+        "q_questions": [3, 4, 5, 7, 8, 9, 10, 11, 12, 13],
+        "m_questions": [14, 15],
+        "key_dict": {1: 'B', 2: 'A', 3: 'B', 4: 'A', 5: 'C', 6: 'B', 7: 'A', 8: 'A', 9: 'B', 10: 'C', 11: 'A', 12: 'D', 13: 'B', 14: 'B', 15: 'D'}
     }
 }
 
