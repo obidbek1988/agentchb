@@ -3408,6 +3408,26 @@ async def callback_confirm_topup(callback: CallbackQuery, state: FSMContext):
     except Exception as e:
         logger.info(f"Userga to'lov xabari yuborilmadi ({uid}): {e}")
 
+@dp.message(F.text == "✅ Rasmlar tugadi, hisobotni tayyorlang!")
+async def fallback_finish_btn(message: types.Message, state: FSMContext):
+    cur_state = await state.get_state()
+    if not cur_state:
+        await message.answer(
+            "ℹ️ Sessiya muddati yakunlangan yoki bot yangilangan.\nIltimos, qaytadan boshlash uchun **/start** buyrug‘ini yuboring.",
+            reply_markup=get_main_keyboard(message.from_user.id),
+            parse_mode="Markdown"
+        )
+
+@dp.message(F.photo)
+async def fallback_photo(message: types.Message, state: FSMContext):
+    cur_state = await state.get_state()
+    if not cur_state:
+        await message.answer(
+            "ℹ️ Iltimos, avval pastdagi menyudan kerakli bo‘limni tanlang (masalan: **4️⃣ CHSB (Testlarni tekshirish)** yoki **3️⃣ BSB (Ishlarni tekshirish)**), so‘ngra rasmlarni yuboring.",
+            reply_markup=get_main_keyboard(message.from_user.id),
+            parse_mode="Markdown"
+        )
+
 async def handle_ping(request):
     return web.Response(text="BSB & CHSB Hisobot Agent Telegram Bot is running 24/7!")
 
