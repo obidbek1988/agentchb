@@ -520,6 +520,78 @@ Javob FAQAT sof JSON bo'lsin.
             "students": students
         }
 
+    def generate_bsb_report_from_averages(self, journal_averages: Dict[str, float], class_name: str = "9-sinf", subject: str = "Informatika", criteria: Optional[List[Dict[str, Any]]] = None, max_score: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Darsdagi baholarga qarab BSB hisobotini o'quvchi yozma ishisiz (100% qog'ozsiz) tezkor generatsiya qiladi.
+        Mezon topshiriqlari va ballari avtomatik to'g'ri taqsimlanadi va hisobot izohi to'ldiriladi.
+        """
+        import random
+        from cyrillic_translit import to_uzbek_latin
+        from emaktab_parser import distribute_score_to_tasks
+        from excel_service import generate_bsb_student_note
+
+        if not criteria:
+            from criteria_store import get_criteria_for_grade
+            c_info = get_criteria_for_grade(class_name) or get_criteria_for_grade("9")
+            criteria = c_info.get("criteria", [])
+            if not max_score:
+                max_score = c_info.get("max_score", 50)
+
+        if not max_score:
+            max_score = sum(c.get("max_point", 10) for c in criteria)
+            if max_score <= 0:
+                max_score = 50
+
+        students = []
+        for idx, (name, avg_grade) in enumerate(journal_averages.items(), start=1):
+            seed = sum(ord(ch) for ch in name) + idx
+            rng = random.Random(seed)
+
+            # O'rtacha baho (1-10 yoki 1-5) ni BSB balliga moslash:
+            if avg_grade >= 9.0:
+                pct = rng.uniform(0.86, 0.98)
+            elif avg_grade >= 7.0:
+                pct = rng.uniform(0.70, 0.84)
+            elif avg_grade >= 5.0:
+                pct = rng.uniform(0.42, 0.65)
+            elif avg_grade >= 2.0:
+                pct = rng.uniform(0.18, 0.38)
+            else:
+                pct = rng.uniform(0.10, 0.25)
+
+            tot_score = int(round(pct * max_score))
+            tot_score = max(min(tot_score, max_score), 1)
+
+            task_scores = distribute_score_to_tasks(tot_score, criteria)
+            note = generate_bsb_student_note(tot_score, max_score, task_scores, criteria)
+            percent = int(round((tot_score / max_score) * 100))
+            grade_num = 5 if percent >= 85 else (4 if percent >= 70 else (3 if percent >= 50 else 2))
+
+            final_name = to_uzbek_latin(name)
+            students.append({
+                "tr": idx,
+                "name": final_name,
+                "total_score": tot_score,
+                "task_scores": task_scores,
+                "percent": percent,
+                "grade": grade_num,
+                "note": to_uzbek_latin(note)
+            })
+
+        return {
+            "school_info": {
+                "class_name": to_uzbek_latin(class_name),
+                "subject": subject,
+                "quarter": 1,
+                "bsb_number": 1,
+                "max_score": max_score,
+                "teacher_name": "Qobilov Obidjon",
+                "head_teacher": "Mahmudova Dilfuzaxon"
+            },
+            "criteria": criteria,
+            "students": students
+        }
+
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False, custom_criteria: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         batch_size = 4

@@ -2683,7 +2683,7 @@ async def mode5_start(message: types.Message, state: FSMContext):
     msg_text = (
         "✍️ **5-REJIM: BSB (Darsdagi o‘rtacha bahoga moslash)**\n\n"
         "🏛 Rasmiy BSB baholash mezonlari tizimda tayyor saqlangan!\n"
-        "*(Mezon rasmini qidirib, skrinshot tashlash shart emas)*\n\n"
+        "*(Daftar rasmi yoki kalit yuklash shart emas — faqat mezonni tasdiqlab, eMaktab Excel faylini yuborsangiz kifoya!)*\n\n"
         "Qaysi sinf hisobotini tayyorlamoqchisiz? **Sinfni tanlang:**"
     )
     await message.answer(msg_text, reply_markup=ikb, parse_mode="Markdown")
@@ -2730,9 +2730,9 @@ async def cb_m5_pick_grade(callback: CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "m5_confirm_criteria")
 async def cb_m5_confirm_criteria(callback: CallbackQuery, state: FSMContext):
-    await state.set_state(BotStates.m5_keys)
+    await state.set_state(BotStates.m5_journal)
     await callback.answer("Mezon tasdiqlandi!")
-    await ask_m5_keys(callback.message)
+    await ask_m5_journal(callback.message)
 
 @dp.callback_query(F.data == "m5_edit_criteria")
 async def cb_m5_edit_criteria(callback: CallbackQuery, state: FSMContext):
@@ -2861,10 +2861,27 @@ async def mode5_keys_photo_rejected(message: types.Message):
         parse_mode="Markdown"
     )
 
+async def ask_m5_journal(message: types.Message):
+    msg_text = (
+        "✅ **BSB baholash mezoni tasdiqlandi!**\n\n"
+        "📍 **2-QADAM (2 tadan): eMaktab elektron jurnali Excel faylini yuboring**\n\n"
+        "💡 eMaktab tizimidan yuklab olingan rasmiy **.xlsx** yoki **.xls** faylini yuboring.\n"
+        "AI Agent o‘quvchilarning darsdagi baholariga moslab **1 soniyada 100% xatosiz rasmiy BSB hisobotini** tayyorlaydi!\n\n"
+        "*(Daftar rasmi yoki kalit yuklash shart emas, barchasi darsdagi baholarga mos avtomatik hisoblanadi)*"
+    )
+    await message.answer(msg_text, reply_markup=get_action_keyboard(show_back=True), parse_mode="Markdown")
+
 @dp.message(BotStates.m5_journal, F.text.in_(["⬅️ Orqaga", "orqaga", "Orqaga", "/back", "back"]))
 async def mode5_journal_back(message: types.Message, state: FSMContext):
-    await state.set_state(BotStates.m5_keys)
-    await ask_m5_keys(message)
+    data = await state.get_data()
+    grade = data.get("selected_grade", "9")
+    await state.set_state(BotStates.m5_criteria)
+    ikb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m5_confirm_criteria")],
+        [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m5_edit_criteria")],
+        [InlineKeyboardButton(text="⬅️ Sinfni o‘zgartirish", callback_data="m5_back_to_grades")]
+    ])
+    await message.answer("⬅️ **1-QADAM: Mezon bosqichiga qaytildi.**", reply_markup=ikb, parse_mode="Markdown")
 
 @dp.message(BotStates.m5_journal, F.document)
 async def mode5_journal_doc(message: types.Message, state: FSMContext):
@@ -2872,7 +2889,8 @@ async def mode5_journal_doc(message: types.Message, state: FSMContext):
     if not (fname.endswith(".xlsx") or fname.endswith(".xls")):
         await message.answer(
             "⚠️ **Iltimos, eMaktab elektron jurnalini Excel (.xlsx yoki .xls) formatida yuboring!**\n\n"
-            "Excel fayl 0% xatosiz va tez tayyor bo‘ladi.",
+            "Excel fayl 0% xatosiz va 1 soniyada tayyor bo‘ladi.\n"
+            "*(PDF yoki rasmlar qabul qilinmaydi)*",
             parse_mode="Markdown"
         )
         return
@@ -2882,17 +2900,56 @@ async def mode5_journal_doc(message: types.Message, state: FSMContext):
     jpath = f"temp/m5_j_{message.from_user.id}_{message.message_id}{ext}"
     await bot.download(message.document, destination=jpath)
 
-    status_j = await message.answer("⏳ Jurnal o‘qilmoqda va o‘quvchilar o‘rtacha baholari hisoblanmoqda...")
+    status_msg = await message.answer("⏳ **Jurnal o‘qilmoqda va dars baholariga mos BSB hisoboti tayyorlanmoqda...**")
     try:
-        averages = await ai_service.parse_journal_averages(jpath)
-        await state.update_data(journal_path=jpath, journal_averages=averages)
-        await status_j.delete()
-        await state.set_state(BotStates.m5_works)
-        await message.answer(f"✅ Jurnaldan {len(averages)} nafar o‘quvchining dars o‘rtacha baholari aniqlandi!")
-        await ask_m5_works(message)
+        detected_cname, averages = await ai_service.parse_journal_data(jpath)
+        if not averages:
+            await status_msg.edit_text("❌ Jurnaldan o‘quvchilar va ularning baholarini o‘qib bo‘lmadi. Iltimos, eMaktab jurnali faylini to‘g‘ri formatda yuboring.")
+            return
+
+        import re
+        cname_match = re.search(r"(\d+[-_]?[a-zA-Zа-яА-Я]*)", message.document.file_name or "")
+        if detected_cname == "9-sinf" and cname_match:
+            detected_cname = cname_match.group(1).upper().replace("_", "-")
+
+        data = await state.get_data()
+        fixed_crit = data.get("fixed_criteria", {})
+        criteria = fixed_crit.get("criteria", [])
+        max_score = fixed_crit.get("max_score", 50)
+        subject = data.get("subject", "Informatika")
+
+        report_data = ai_service.generate_bsb_report_from_averages(
+            averages,
+            class_name=detected_cname,
+            subject=subject,
+            criteria=criteria,
+            max_score=max_score
+        )
+
+        out_excel = f"temp/{message.from_user.id}_{detected_cname}_bsb_bahoga_moslangan.xlsx"
+        build_bsb_excel(report_data, out_excel)
+
+        doc = FSInputFile(out_excel, filename=f"{detected_cname}_BSB_bahoga_moslangan_hisobot.xlsx")
+        cap = (
+            f"🎉 **{detected_cname} sinf o‘quvchilari darsdagi baholariga to‘liq moslashtirildi va BSB hisoboti tayyorlandi!**\n\n"
+            f"• 👥 **Jami o‘quvchilar:** {len(averages)} nafar\n"
+            f"• 🎯 **Maksimal ball:** {max_score} ball\n"
+            f"• 9–10 baho ➔ A'lo (86%–98%)\n"
+            f"• 7–8 baho ➔ Yaxshi (70%–84%)\n"
+            f"• 5–6 baho ➔ Qoniqarli (42%–65%)\n"
+            f"• Har bir o‘quvchining mezonlar bo‘yicha to‘plagan ballari va xato/kamchiliklari izoh ustunida to‘liq yozildi."
+            f"{FEEDBACK_NOTE}"
+        )
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
+        await send_to_archive(out_excel, f"📁 Bahoga moslangan BSB: {detected_cname} | @{message.from_user.username or message.from_user.id}")
+        await status_msg.delete()
+
+        credit_type = data.get("credit_type", "paid")
+        db_service.consume_credit(message.from_user.id, credit_type, admin_id=ADMIN_ID)
+        await state.clear()
     except Exception as e:
-        logger.error(f"Mode 5 Journal parse error: {e}")
-        await status_j.edit_text("❌ Jurnalni o‘qishda xatolik yuz berdi. Iltimos, eMaktab Excel faylini to‘g‘ri formatda yuboring.")
+        logger.error(f"Mode 5 Doc Error: {e}", exc_info=True)
+        await status_msg.edit_text(f"❌ Xatolik yuz berdi: {str(e)}\nSavollar uchun admin: @{ADMIN_USERNAME}")
 
 @dp.message(BotStates.m5_journal, F.photo)
 async def mode5_journal_photo(message: types.Message, state: FSMContext):
