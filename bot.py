@@ -1374,6 +1374,7 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
         db_service.consume_credit(actual_user_id, credit_type, admin_id=ADMIN_ID)
+        db_service.clear_session_files(actual_user_id, "m4")
         await state.clear()
     except Exception as e:
         logger.error(f"Mode 2 Error: {e}", exc_info=True)
@@ -1918,9 +1919,8 @@ async def mode4_photo(message: types.Message, state: FSMContext):
     tpath = f"temp/m4_t_{message.from_user.id}_{message.message_id}.jpg"
     await bot.download(message.photo[-1], destination=tpath)
 
-    data = await state.get_data()
-    tlist = data.get("test_paths", [])
-    tlist.append(tpath)
+    db_service.save_session_file(message.from_user.id, "m4", tpath)
+    tlist = db_service.get_session_files(message.from_user.id, "m4")
     await state.update_data(test_paths=tlist)
 
     ikb = InlineKeyboardMarkup(inline_keyboard=[
@@ -1962,7 +1962,7 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
     ctext = data.get("criteria_text", "")
     kpath = data.get("keys_path", "")
     ktext = data.get("keys_text", "")
-    tlist = data.get("test_paths", [])
+    tlist = data.get("test_paths") or db_service.get_session_files(actual_user_id, "m4")
 
     if not tlist:
         await message.answer("Iltimos, avval kamida bitta o‘quvchi test javobi rasmini yuboring.")

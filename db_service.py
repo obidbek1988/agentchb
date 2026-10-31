@@ -61,6 +61,15 @@ def init_db():
             value TEXT
         )
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_session_files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            mode TEXT,
+            file_path TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -389,5 +398,28 @@ def update_transaction_status(tx_id: int, status: str):
         pass
 
 # Initialize and restore
+
+def save_session_file(user_id: int, mode: str, file_path: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO user_session_files (user_id, mode, file_path) VALUES (?, ?, ?)", (user_id, mode, file_path))
+    conn.commit()
+    conn.close()
+
+def get_session_files(user_id: int, mode: str) -> List[str]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_path FROM user_session_files WHERE user_id = ? AND mode = ? ORDER BY id ASC", (user_id, mode))
+    rows = cursor.fetchall()
+    conn.close()
+    return [r[0] for r in rows if os.path.exists(r[0])]
+
+def clear_session_files(user_id: int, mode: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM user_session_files WHERE user_id = ? AND mode = ?", (user_id, mode))
+    conn.commit()
+    conn.close()
+
 init_db()
 restore_from_github()
