@@ -36,7 +36,7 @@ class AIService:
             img = ImageOps.exif_transpose(img) or img
             if img.mode not in ("RGB", "L"):
                 img = img.convert("RGB")
-            max_dim = 1600
+            max_dim = 1280
             if max(img.size) > max_dim:
                 img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
             return img
@@ -332,7 +332,7 @@ Javob FAQAT sof JSON bo'lsin.
 
     # 2-TUGMA: BSB o'quvchilar ishini tekshirish (BATCH PROCESSOR: 5 tadan bo'lib tekshiradi!)
     async def evaluate_student_works(self, criteria_img_path: str, work_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, keys_input: str = "", is_text_key: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
-        batch_size = 8
+        batch_size = 4
         all_students = []
         final_info = {}
         criteria_list = []
@@ -505,7 +505,7 @@ Javob FAQAT sof JSON bo'lsin.
 
     # 4-TUGMA: CHSB Testlarni tekshirish (BATCH PROCESSOR: 4 tadan bo'lib xavfsiz tekshiradi!)
     async def evaluate_test_answers(self, keys_input: str, student_test_img_paths: List[str], progress_callback: Optional[Callable] = None, batch_callback: Optional[Callable] = None, is_text_key: bool = False, criteria_input: str = "", is_text_criteria: bool = False, journal_averages: Optional[Dict[str, float]] = None, is_adjusted: bool = False) -> Dict[str, Any]:
-        batch_size = 10
+        batch_size = 4
         all_students = []
         final_info = {}
 
@@ -652,33 +652,35 @@ Javob FAQAT sof JSON bo'lsin.
             raise
 
     def _send_prompt_to_gemini(self, prompt: str, img_paths: List[str]) -> Dict[str, Any]:
-        retries = 5  # 5 tagacha xavfsiz urinish
+        retries = 6  # 6 tagacha xavfsiz urinish
         last_error = None
+        models_pool = ["gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]
+
+        loaded_imgs = [self._optimize_image(p) for p in img_paths if p and os.path.exists(p)]
+        loaded_imgs = [im for im in loaded_imgs if im is not None]
+        content = [prompt] + loaded_imgs
 
         for attempt in range(retries):
             key = self._get_next_key()
+            model_name = models_pool[attempt % len(models_pool)]
             genai.configure(api_key=key, transport="rest")
-            model = genai.GenerativeModel("gemini-2.5-flash")
-
-            loaded_imgs = [self._optimize_image(p) for p in img_paths if p and os.path.exists(p)]
-            loaded_imgs = [im for im in loaded_imgs if im is not None]
-            content = [prompt] + loaded_imgs
+            model = genai.GenerativeModel(model_name)
 
             try:
-                response = model.generate_content(content)
+                response = model.generate_content(content, request_options={"timeout": 45})
                 txt = response.text.strip()
                 return self._extract_json(txt)
             except Exception as e:
                 err_str = str(e)
-                logger.warning(f"Attempt {attempt+1}/{retries} failed with key ...{key[-4:]}: {e}")
+                logger.warning(f"Attempt {attempt+1}/{retries} with {model_name} (key ...{key[-4:]}) failed: {e}")
                 last_error = e
                 import time
                 # Agar 429 bo'lsa darhol keyingi kalitga o'tish uchun kutish
                 if any(w in err_str.lower() for w in ["429", "quota", "exhausted", "rate"]):
                     logger.info("429 Rate limit aniqlandi, keyingi kalitga avtomatik o'tilmoqda...")
-                    time.sleep(3.5)
+                    time.sleep(2.5)
                 else:
-                    time.sleep(2.0)
+                    time.sleep(1.0)
 
         raise RuntimeError(f"Gemini so'rovi bajarilmadi: {last_error}")
 
