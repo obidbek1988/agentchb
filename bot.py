@@ -1,3 +1,4 @@
+import re
 import os
 import certifi
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -748,12 +749,25 @@ async def cb_m1_universal_criteria(callback: CallbackQuery, state: FSMContext):
     preview = "\n".join(lines)
 
     await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
+    await state.set_state(BotStates.m1_journal_fixed)
     ikb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Shu mezon bilan davom etish", callback_data="grade_9")],
+        [InlineKeyboardButton(text="✅ Shu mezon bilan davom etish", callback_data="m1_confirm_universal")],
         [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
         [InlineKeyboardButton(text="⬅️ Ortga", callback_data="back_to_grades")]
     ])
-    await callback.message.edit_text(f"{preview}\n\nIxtiyoriy fanga moslab ballar va topshiriqlarni o‘zgartirishingiz mumkin:", reply_markup=ikb, parse_mode="Markdown")
+    await callback.message.edit_text(f"{preview}\n\n💡 _Topshiriqlar ballarini o‘zgartirish uchun chatga yozib yuboring (masalan: `5, 5, 5, 5, 5` yoki `10, 10, 10, 20`):_", reply_markup=ikb, parse_mode="Markdown")
+    await callback.answer()
+
+@dp.callback_query(F.data == "m1_confirm_universal")
+async def cb_m1_confirm_universal(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(BotStates.m1_journal_fixed)
+    await callback.message.answer(
+        "✅ **Universal BSB mezoni tanlandi!**\n\n"
+        "💡 **eMaktabdan yuklangan rasmiy Excel (.xlsx yoki .xls) faylini yuboring!**\n"
+        "AI Agent darsdagi baholarga qarab 1 soniyada mukammal hisobot tayyorlaydi.",
+        reply_markup=get_action_keyboard(),
+        parse_mode="Markdown"
+    )
     await callback.answer()
 
 @dp.callback_query(F.data == "m2_universal_criteria")
@@ -772,12 +786,13 @@ async def cb_m2_universal_criteria(callback: CallbackQuery, state: FSMContext):
     preview = "\n".join(lines)
 
     await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
+    await state.set_state(BotStates.m2_criteria)
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m2_confirm_criteria")],
         [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m2_edit_criteria")],
         [InlineKeyboardButton(text="⬅️ Ortga", callback_data="m2_back_to_grades")]
     ])
-    await callback.message.edit_text(f"{preview}\n\nMezonni tasdiqlaysizmi yoki topshiriqlar va ballarini tahrirlaysizmi?", reply_markup=ikb, parse_mode="Markdown")
+    await callback.message.edit_text(f"{preview}\n\n💡 _Topshiriqlar ballarini o‘zgartirish uchun chatga yozib yuboring (masalan: `5, 5, 5, 5, 5` yoki `10, 10, 10, 20`):_", reply_markup=ikb, parse_mode="Markdown")
     await callback.answer()
 
 @dp.callback_query(F.data == "m5_universal_criteria")
@@ -796,12 +811,13 @@ async def cb_m5_universal_criteria(callback: CallbackQuery, state: FSMContext):
     preview = "\n".join(lines)
 
     await state.update_data(fixed_criteria=crit_info, selected_grade="Universal", criteria_text=preview)
+    await state.set_state(BotStates.m5_criteria)
     ikb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Shu mezonni tasdiqlash", callback_data="m5_confirm_criteria")],
         [InlineKeyboardButton(text="✏️ Mezon va ballarni tahrirlash", callback_data="m5_edit_criteria")],
         [InlineKeyboardButton(text="⬅️ Ortga", callback_data="m5_back_to_grades")]
     ])
-    await callback.message.edit_text(f"{preview}\n\nMezonni tasdiqlaysizmi yoki topshiriqlar va ballarini tahrirlaysizmi?", reply_markup=ikb, parse_mode="Markdown")
+    await callback.message.edit_text(f"{preview}\n\n💡 _Topshiriqlar ballarini o‘zgartirish uchun chatga yozib yuboring (masalan: `5, 5, 5, 5, 5` yoki `10, 10, 10, 20`):_", reply_markup=ikb, parse_mode="Markdown")
     await callback.answer()
 
 @dp.callback_query(F.data == "m6_universal_start")
@@ -1231,6 +1247,7 @@ async def mode1_criteria_finish(message: types.Message, state: FSMContext):
 # ==================== 2-REJIM: BSB ISHLARNI TEKSHIRISH ====================
 
 def parse_custom_bsb_criteria(text: str, default_grade: str = "9") -> List[Dict[str, Any]]:
+    import re
     """
     Parses user-edited BSB criteria.
     Supports:
@@ -1498,8 +1515,8 @@ async def cb_m2_edit_criteria(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BotStates.m2_edit_criteria_input)
     await callback.answer()
     data = await state.get_data()
-    grade = data.get("selected_grade", "9")
-    crit_info = get_criteria_for_grade(grade)
+    grade = data.get("selected_grade", "Universal")
+    crit_info = data.get("fixed_criteria") or get_criteria_for_grade(grade)
     c_list = crit_info.get("criteria", []) if crit_info else []
     sample_lines = []
     for c in c_list:
@@ -1522,6 +1539,8 @@ async def cb_m2_edit_criteria(callback: CallbackQuery, state: FSMContext):
     )
     await callback.message.edit_text(msg, reply_markup=ikb, parse_mode="Markdown")
 
+@dp.message(BotStates.m2_criteria, F.text)
+@dp.message(BotStates.m1_journal_fixed, F.text)
 @dp.message(BotStates.m2_edit_criteria_input, F.text)
 async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
     txt = (message.text or "").strip()
@@ -1539,11 +1558,12 @@ async def mode2_edit_criteria_text(message: types.Message, state: FSMContext):
         return
 
     data = await state.get_data()
-    grade = data.get("selected_grade", "9")
+    grade = data.get("selected_grade", "Universal")
     parsed_criteria = parse_custom_bsb_criteria(txt, default_grade=grade)
     tot_points = sum(c.get("max_point", 10) for c in parsed_criteria)
 
-    lines = [f"📋 **Yangilangan {grade}-sinf BSB mezoni (Jami: {tot_points} ball):**"]
+    grade_title = "UNIVERSAL" if grade == "Universal" else f"{grade}-sinf"
+    lines = [f"📋 **Yangilangan {grade_title} BSB mezoni (Jami: {tot_points} ball):**"]
     for c in parsed_criteria:
         lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
     custom_preview = "\n".join(lines)
@@ -2939,6 +2959,7 @@ async def cb_m5_edit_criteria(callback: CallbackQuery, state: FSMContext):
     ])
     await callback.message.edit_text(guide_msg, reply_markup=ikb, parse_mode="Markdown")
 
+@dp.message(BotStates.m5_criteria, F.text)
 @dp.message(BotStates.m5_edit_criteria_input, F.text)
 async def mode5_criteria_custom_text(message: types.Message, state: FSMContext):
     if message.text.lower() in ["❌ bekor qilish", "bekor qilish", "/start"]:
@@ -2947,11 +2968,12 @@ async def mode5_criteria_custom_text(message: types.Message, state: FSMContext):
         return
 
     data = await state.get_data()
-    grade = data.get("selected_grade", "9")
+    grade = data.get("selected_grade", "Universal")
     parsed_crit = parse_custom_bsb_criteria(message.text, default_grade=grade)
     tot_pts = sum(c.get("max_point", 10) for c in parsed_crit)
 
-    lines = [f"📋 **Yangilangan {grade}-sinf BSB mezoni (Jami: {tot_pts} ball):**"]
+    grade_title = "UNIVERSAL" if grade == "Universal" else f"{grade}-sinf"
+    lines = [f"📋 **Yangilangan {grade_title} BSB mezoni (Jami: {tot_pts} ball):**"]
     for c in parsed_crit:
         lines.append(f"• **{c['task_number']}-topshiriq [{c['max_point']} ball]**: {c['skill_text']}")
     custom_preview = "\n".join(lines)
