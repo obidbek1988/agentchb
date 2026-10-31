@@ -11,7 +11,7 @@ import base64
 import ssl
 import urllib.request
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +200,77 @@ def save_setting(key: str, value: str):
         threading.Thread(target=trigger_cloud_sync, daemon=True).start()
     except Exception:
         pass
+
+def is_vip_user(user_id: int) -> bool:
+    try:
+        raw = get_setting("vip_users", "[]")
+        vip_list = json.loads(raw)
+        return int(user_id) in [int(x) for x in vip_list]
+    except Exception:
+        return False
+
+def add_vip_user(user_id: int) -> bool:
+    try:
+        raw = get_setting("vip_users", "[]")
+        vip_list = [int(x) for x in json.loads(raw)]
+        uid = int(user_id)
+        if uid not in vip_list:
+            vip_list.append(uid)
+            save_setting("vip_users", json.dumps(vip_list))
+        return True
+    except Exception as e:
+        logger.error(f"add_vip_user error: {e}")
+        return False
+
+def remove_vip_user(user_id: int) -> bool:
+    try:
+        raw = get_setting("vip_users", "[]")
+        vip_list = [int(x) for x in json.loads(raw)]
+        uid = int(user_id)
+        if uid in vip_list:
+            vip_list.remove(uid)
+            save_setting("vip_users", json.dumps(vip_list))
+        return True
+    except Exception as e:
+        logger.error(f"remove_vip_user error: {e}")
+        return False
+
+def get_vip_users() -> List[int]:
+    try:
+        raw = get_setting("vip_users", "[]")
+        return [int(x) for x in json.loads(raw)]
+    except Exception:
+        return []
+
+def find_users(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    q = query.strip().lstrip("@")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    if q.isdigit():
+        cursor.execute(
+            "SELECT * FROM users WHERE user_id = ? OR username LIKE ? OR full_name LIKE ? ORDER BY created_at DESC LIMIT ?", 
+            (int(q), f"%{q}%", f"%{q}%", limit)
+        )
+    else:
+        cursor.execute(
+            "SELECT * FROM users WHERE username LIKE ? OR full_name LIKE ? ORDER BY created_at DESC LIMIT ?", 
+            (f"%{q}%", f"%{q}%", limit)
+        )
+        
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 # ==================== FOYDALANUVCHILAR VA BALANS ====================
 
