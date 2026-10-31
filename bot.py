@@ -1369,7 +1369,7 @@ async def mode2_finish(message: types.Message, state: FSMContext, user_id: int =
 
         doc = FSInputFile(out_excel, filename=f"{cname}_BSB_tekshirilgan_hisobot.xlsx")
         cap = f"🎉 **{cname} sinf o‘quvchilarining yozma ishlari to‘liq tekshirildi va BSB hisoboti tuzildi!**{FEEDBACK_NOTE}"
-        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(actual_user_id), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan BSB: {cname} | @{actual_username}")
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
@@ -2003,14 +2003,25 @@ async def mode4_finish(message: types.Message, state: FSMContext, user_id: int =
             is_text_criteria=is_text_crit
         )
         chosen_grade = data.get("grade", "")
-        detected_class = parsed.get("school_info", {}).get("class_name", "")
-        cname = detected_class or (f"{chosen_grade}-sinf" if chosen_grade else "9-sinf")
+        detected_class = str(parsed.get("school_info", {}).get("class_name", "")).strip()
+        if chosen_grade == "9":
+            # Agar 9-sinf tanlangan bo'lsa, AI adashib 6-G deb olmasin
+            if "9" in detected_class:
+                cname = detected_class
+            elif any(ch.isalpha() for ch in detected_class):
+                letter = "".join([c for c in detected_class if c.isalpha()]).upper()
+                cname = f"9-{letter}"
+            else:
+                cname = "9-B"
+        else:
+            cname = detected_class or (f"{chosen_grade}-sinf" if chosen_grade else "9-sinf")
+
         out_excel = f"temp/{actual_user_id}_{cname}_chsb_test_hisoboti.xlsx"
         build_chsb_excel(parsed, out_excel)
 
         doc = FSInputFile(out_excel, filename=f"{cname}_CHSB_test_hisoboti.xlsx")
         cap = f"🎉 **{cname} sinf CHSB testlari muvaffaqiyatli tekshirildi va test hisoboti tayyorlandi!**\n• Har bir o‘quvchining to‘g‘ri/noto‘g‘ri javoblari va yakuniy bali hisobotda aks etgan.{FEEDBACK_NOTE}"
-        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(actual_user_id), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Tekshirilgan Test CHSB: {cname} | @{actual_username}")
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")
@@ -2349,7 +2360,7 @@ async def mode5_finish(message: types.Message, state: FSMContext, user_id: int =
             f"• Har bir o‘quvchi bo‘yicha batafsil tahlil hisobot oxirgi ustunida yozildi."
             f"{FEEDBACK_NOTE}"
         )
-        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(message.from_user.id), parse_mode="Markdown")
+        await message.answer_document(doc, caption=cap, reply_markup=get_main_keyboard(actual_user_id), parse_mode="Markdown")
         await send_to_archive(out_excel, f"📁 Bahoga moslangan BSB: {cname} | @{actual_username}")
         await status_msg.delete()
         credit_type = data.get("credit_type", "paid")

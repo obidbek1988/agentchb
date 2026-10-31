@@ -604,10 +604,10 @@ O'quvchilarning 40 ballik jurnaldagi ballini ushbu 3 ta mezon [B, Q, M] ga to'g'
 Quyidagi JSON formatida qaytaring:
 {
   "school_info": {
-    "class_name": "6-G",
+    "class_name": "9-B",
     "subject": "Informatika",
-    "quarter": 2,
-    "chsb_number": 2,
+    "quarter": 1,
+    "chsb_number": 1,
     "max_score": 40,
     "teacher_name": "Qobilov Obidjon",
     "head_teacher": "Mahmudova Dilfuzaxon"
